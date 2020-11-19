@@ -1,0 +1,14 @@
+#+title: You and me, zyre. 🍠
+
+* Problem statement
+
+- you want an app-centric Zyre peer discovery mechanism with socket address resolution
+
+- you want to specify addresses abstractly without carrying about  minor details such as IP and port numbers
+
+- you have an application architecture where sockets are created in disjoint components
+
+- you have sockets created in their own threads
+
+- you develop in C++
+
