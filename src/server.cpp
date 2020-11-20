@@ -18,7 +18,7 @@ bool have_expected(const std::vector<std::string>& expected,
         return false;
     }
     for (const auto& one : expected) {
-        if (rrs.first.find(one) == rrs.first.end()) {
+        if (rrs.find(one) == rrs.end()) {
             return false;
         }
     }
@@ -31,7 +31,7 @@ bool have_expected(const std::vector<std::string>& expected,
 static
 void update(zmq::socket_t& sock,
             std::string your_node,
-            yamz::json& jdata
+            yamz::data_t& jdata,
             rrs_t& rrs)
 {
     // this deep loop could be unrolled by indexing the queries by
@@ -40,26 +40,25 @@ void update(zmq::socket_t& sock,
     // fixme: what do when peer EXITs?
 
     //         jdata[rr.first] = rr.second.request.binds;
-    for (auto& jcomp : jdata) {
+    for (auto& jcomp : jdata.items()) {
         std::string your_comp = jcomp.key();
         for (auto& jbind: jcomp.value()) {
             // .port, .type, .addrs            
-            auto cport = jbind.get<ConcretePort>();
+            auto cport = jbind.get<yamz::ConcretePort>();
             auto your_port = cport.port;
             // scan if anyone wants (node,comp,port)
             for (auto& rrit : rrs) {
                 const auto my_portname = rrit.first;
-                auto req& = rrit.second.request;
-                auto rep& = rrit.second.reply;
+                auto& rr = rrit.second;
 
-                for (auto& aport : req.conns) {
+                for (auto& aport : rr.request.conns) {
                     // aport.port
                     for (auto& aaddr : aport.addrs) {
-                        if (your_node != aadr.node) { continue; }
-                        if (your_comp != addr.comp) { continue; }
-                        if (your_port != addr.port) { continue; }
+                        if (your_node != aaddr.node) { continue; }
+                        if (your_comp != aaddr.comp) { continue; }
+                        if (your_port != aaddr.port) { continue; }
                         // bingo
-                        rep.conns.push_back(cport);
+                        rr.reply.conns.push_back(cport);
                     }
                 }
 
@@ -74,21 +73,16 @@ void update(zmq::socket_t& sock,
 
 
 static
-void yamz::server(zmq::context_t& ctx, yamz::Server::Params params)
+void server(yamz::Server::Params params)
 {
-    struct RR {
-        yamz::Request request{};
-        yamz::Reply reply{};
-    };
     rrs_t rrs;
 
-
-    zmq::socket_t link(ctx, zmq::socket_type::pair);
+    zmq::socket_t link(params.ctx, zmq::socket_type::pair);
     link.connect(params.linkname);
     // notify ready for caller to continue
-    link.send(zio::message_t{}, zio::send_flags::none);
+    link.send(zmq::message_t{}, zmq::send_flags::none);
 
-    zmq::socket_t sock(ctx, zmq::socket_type::server);
+    zmq::socket_t sock(params.ctx, zmq::socket_type::server);
     for (auto& addr : params.tobind) {
         sock.bind(addr);
     }
@@ -105,7 +99,12 @@ void yamz::server(zmq::context_t& ctx, yamz::Server::Params params)
             // actor protocol
             if (events[iev].socket == link) {
                 zmq::message_t msg;
-                auto res = sock.recv(link, zmq::recv_flags::none);
+                auto res = sock.recv(msg);
+                if (!res) {
+                    // fixme: handle better
+                    return;
+                }
+
                 auto cmd = msg.to_string();
                 if (cmd == "ONLINE") {
                     std::string rep = "OKAY";
@@ -114,6 +113,10 @@ void yamz::server(zmq::context_t& ctx, yamz::Server::Params params)
                     }
                     auto sres = link.send(zmq::message_t(rep),
                                           zmq::send_flags::none);
+                    if (!sres) {
+                        // fixme: handle better
+                        return;
+                    }
                     receiving = false;
                     break;
                 }
@@ -123,11 +126,18 @@ void yamz::server(zmq::context_t& ctx, yamz::Server::Params params)
             // recieve requests protocol
             if (events[iev].socket == sock) {
                 zmq::message_t msg;
-                auto res = sock.recv(link, zmq::recv_flags::none);
-                auto sreq = msg.to_string();
-                auto req = json.parse(sreq).get<Request>();
+                auto res = sock.recv(msg);
+                if (!res) {
+                    // fixme: handle better
+                    return;
+                }
+                // fixme: add ROUTER id storage!
+                assert(false);
 
-                rrs[req.ident] = RR{req}
+                auto sreq = msg.to_string();
+                auto req = yamz::data_t::parse(sreq).get<yamz::Request>();
+
+                rrs[req.comp] = RR{req, {req.comp}};
                 if (have_expected(params.expected, rrs)) {
                     receiving = false;
                     break;
@@ -149,12 +159,12 @@ void yamz::server(zmq::context_t& ctx, yamz::Server::Params params)
     // "standard" conventions for header syntax are all over the map
     // and b) the structured header proposal uses a goofy lookin'
     // syntax that I don't want to parse and c) this isn't HTTP.
-    json jheadval;
+    yamz::data_t jheadval;
     for (auto& rr : rrs) {
         jheadval[rr.first] = rr.second.request.binds;
     }
-    zyre.set_header("YAMZ", jheadval.dumps());
-    auto zsock = zyre.socket()
+    zyre.set_header("YAMZ", jheadval.dump());
+    auto zsock = zyre.socket();
 
     zmq::poller_t<> poller2;
     poller2.add(link, zmq::event_flags::pollin);
@@ -169,7 +179,11 @@ void yamz::server(zmq::context_t& ctx, yamz::Server::Params params)
             // actor protocol
             if (events[iev].socket == link) {
                 zmq::message_t msg;
-                auto res = sock.recv(link, zmq::recv_flags::none);
+                auto res = sock.recv(msg);
+                if (!res) {
+                    // fixme: handle better
+                    return;
+                }
                 auto cmd = msg.to_string();
                 if (cmd == "ONLINE") {
                     std::string rep = "OKAY";
@@ -178,6 +192,10 @@ void yamz::server(zmq::context_t& ctx, yamz::Server::Params params)
                     }
                     auto sres = link.send(zmq::message_t(rep),
                                           zmq::send_flags::none);
+                    if (!sres) {
+                        // fixme: handle better
+                        return;
+                    }
                     continue;
                 }
                 return;         // terminated
@@ -188,8 +206,8 @@ void yamz::server(zmq::context_t& ctx, yamz::Server::Params params)
                 auto zev = zyre.event();
                 if (zev.type() == "ENTER") {
                     auto nodename = zev.peer_name();
-                    auto jdat = json.parse(zev.header("YAMZ"));
-                    update(nodename, jdat, rrs);
+                    auto jdata = yamz::data_t::parse(zev.header("YAMZ"));
+                    update(sock, nodename, jdata, rrs);
                     if (rrs.size()) {
                         continue;
                     }
@@ -207,8 +225,13 @@ void yamz::server(zmq::context_t& ctx, yamz::Server::Params params)
     // respond and close out request
         
     // wait for death signal
-    zio::message_t die;
+    zmq::message_t die;
     auto res = link.recv(die);
+    if (!res) {
+        // fixme: handle better;
+        return;
+    }
+    return;
 }
                 
 
@@ -221,17 +244,17 @@ yamz::Server::Server(zmq::context_t& ctx,
     params.linkname = ss.str();
 }
 
-void set_name(std::string nodename)
+void yamz::Server::set_name(std::string nodename)
 {
     params.nodename = nodename;
 }
 
-void set_port(int port)
+void yamz::Server::set_port(int port)
 {
     params.port = port;
 }
 
-void start(std::vector<std::string> expected)
+void yamz::Server::start(std::vector<std::string> expected)
 {
     params.expected = expected;
 
@@ -248,6 +271,7 @@ bool yamz::Server::discover()
     // send ONLINE to link
     // read back OKAY/FAIL
     // return bool
+    return false;
 }
 
 yamz::Server::~Server()

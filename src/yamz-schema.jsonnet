@@ -36,36 +36,36 @@ local yamz = {
     concaddrs: s.sequence("ConcreteAddresses", self.concaddr),
 
     concport: s.record("ConcretePort", [
-        s.field("port", s.ident,
+        s.field("port", self.ident,
                 doc="Identify a port of the client"),
-        s.field("type", s.socktype,
+        s.field("type", self.socktype,
                 doc="The ZeroMQ socket type"),
-        s.field("addrs", s.concaddrs,
+        s.field("addrs", self.concaddrs,
                 doc="Concrete addresses associated with port"),
     ], doc="An association of a port and its concrete addresses"),
-    concports: s.record("ConcretePorts", self.concport),
+    concports: s.sequence("ConcretePorts", self.concport),
 
     // Abstract address means it is given in terms of a Zyre node aka
     // peer name, a component name and a port name associated with a
     // socket in the network peer.
 
     abstaddr: s.record("AbstractAddress", [
-        s.field("node", s.ident,
+        s.field("node", self.ident,
                 doc="Identify a node"),
-        s.field("comp", s.ident,
+        s.field("comp", self.ident,
                 doc="Identify a node's component"),
-        s.field("port", s.ident,
+        s.field("port", self.ident,
                 doc="Identify a component's port"),
     ], doc="Abstractly identify a socket address"),
     abstaddrs: s.sequence("AbstractAddresses", self.abstaddr),
 
     abstport: s.record("AbstractPort", [
-        s.field("port", s.ident,
+        s.field("port", self.ident,
                 doc="Name of the clients port that wants to connect"),
-        s.field("addrs", s.abstaddrs,
+        s.field("addrs", self.abstaddrs,
                 doc="Abstract addresses for server to match"),
     ], doc="All addresses to resolve for one client port"),
-    abstports: s.record("AbstractPorts", self.abstrport),
+    abstports: s.sequence("AbstractPorts", self.abstport),
 
     request: s.record("Request", [
         s.field("comp", self.ident,
@@ -82,5 +82,6 @@ local yamz = {
         s.field("conns", self.concports,
                 doc="A set of concrete port addresses client may connect"),
     ], doc="Request reply from server to client"),
-    
-}
+};
+moo.oschema.sort_select(yamz)
+

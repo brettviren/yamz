@@ -18,7 +18,7 @@ namespace yamz {
         // until all expected are found.  If no expected are given,
         // rely on explicit online command.
         Server(zmq::context_t& ctx,
-               std::vector<std::string> tobind = { "inproc://yamz" })
+               std::vector<std::string> tobind = { "inproc://yamz" });
 
         ~Server();
         

@@ -102,12 +102,12 @@ def build(bld):
 
     sources = bld.path.ant_glob('src/*.cpp')
     bld.shlib(features='cxx',
+              includes='inc',
               source=sources, target='yamz',
               uselib_store='YAMZ', use=use)
 
     tsources = bld.path.ant_glob('test/test*.cpp')
     if tsources and not bld.options.no_tests:
-        # fixme: it would be nice to have an option that builds but doesn't run
         features = 'test cxx'
         if bld.options.quell_tests:
             features = 'cxx'
@@ -115,16 +115,16 @@ def build(bld):
         for tmain in tsources:
             uses = use + ['PTHREAD']
             includes = ['test']
-            if tmain.name.startswith("test_yamz_"):  # depends on yamz internals
+            if tmain.name.startswith("test_yamz_"):
+                # depends on yamz internals
                 uses.insert(0, "yamz")
-                includes.append('src')
+                includes += ['inc', 'src']
 
             bld.program(features=features,
                         source=[tmain], target=tmain.name.replace('.cpp', ''),
                         ut_cwd=bld.path,
                         install_path=None,
                         includes=includes,
-                        #rpath=rpath,
                         use=uses)
 
     bld.add_post_fun(waf_unit_test.summary)

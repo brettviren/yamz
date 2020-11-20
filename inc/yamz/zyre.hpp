@@ -6,6 +6,7 @@
 #ifndef YAMZ_ZYRE_HPP
 #define YAMZ_ZYRE_HPP
 
+#include "yamz/zeromq.hpp"
 #include "zyre.h"
 #include <exception>
 
@@ -20,7 +21,7 @@ namespace yamz {
       public:
         ZyreEvent(zyre_event_t* own) : evt(own) { }
         ~ZyreEvent( ) {
-            zyre_event_destory(&evt);
+            zyre_event_destroy(&evt);
         }
 
         ZyreEvent(const ZyreEvent&) = delete;
@@ -53,20 +54,20 @@ namespace yamz {
         }
 
         std::string peer_addr() {
-            const char *s = zyre_event_peer_addr(m_self);
+            const char *s = zyre_event_peer_addr(evt);
             if (s) { return s; }
             return "";
         }
 
         std::string group() const
         {
-            const char *s = zyre_event_group(m_self);
+            const char *s = zyre_event_group(evt);
             if (s) { return s; }
             return "";
         }
 
         std::string header(const std::string& key, const std::string& def="") {
-            const char *s = zyre_event_header(m_self, key.c_str());
+            const char *s = zyre_event_header(evt, key.c_str());
             if (s) { return s; }
             return def;
         }
@@ -102,7 +103,7 @@ namespace yamz {
         }
 
         void start() {
-            int rc = zyre_start(zyre);
+            int rc = zyre_start(peer);
             if (rc) {
                 throw zyre_error("failed to start zyre");
             }
