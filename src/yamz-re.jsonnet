@@ -13,17 +13,13 @@ local onetwo = function(one, two, delim='=', space=' ?')
     
 
 {
-    zmq: {
-        addrs: std.join('|',[moo.re.tcp, moo.re.ipc, moo.re.inproc]),
-    },
-
     address: {
-        concrete: onemany($.zmq.addrs, ',', ' ?'),
+        concrete: onemany(moo.re.zmq.uri, ',', ' ?'),
         abstract: onemany(moo.re.ident, "/", ''),
     },
 
     portpair: onetwo(self.address.abstract.singular,
-                     self.zmq.socktype, ':'),
+                     moo.re.zmq.socket.name, ':'),
 
     acpair: onetwo(self.portpair, self.address.concrete.plural, '='),
 

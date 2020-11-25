@@ -4,6 +4,7 @@
 // We really want to use poller and that currently requires DRAFT
 #define ZMQ_BUILD_DRAFT_API 1
 #include <zmq.hpp>
+#include <zmq_addon.hpp>
 
 // Zyre provides the heavy lifting.
 #include <zyre.h>

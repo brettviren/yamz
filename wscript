@@ -85,13 +85,16 @@ def configure(cfg):
 def build(bld):
 
     use = ['ZYRE', 'ZMQ', 'NLJS']
+    rpath = [bld.env["PREFIX"] + '/lib']
+    rpath += [bld.env["LIBPATH_%s"%u][0] for u in use if bld.env["LIBPATH_%s"%u]]
+    rpath = list(set(rpath))
 
     if "MOO" in bld.env:
         print("regenerate")
         model = bld.path.find_resource("src/yamz-model.jsonnet")
-        srcdir = model.parent
-        struct = srcdir.make_node("Structs.hpp")
-        nljs = srcdir.make_node("Nljs.hpp")
+        incdir = bld.path.find_resource("inc/yamz/util.hpp").parent
+        struct = incdir.make_node("Structs.hpp")
+        nljs = incdir.make_node("Nljs.hpp")
         cmd = "${MOO} render -o ${TGT} ${SRC}"
         bld(rule=cmd + " ostructs.hpp.j2",
             source=model, target=struct,
@@ -103,6 +106,7 @@ def build(bld):
     sources = bld.path.ant_glob('src/*.cpp')
     bld.shlib(features='cxx',
               includes='inc',
+              rpath=rpath,
               source=sources, target='yamz',
               uselib_store='YAMZ', use=use)
 
@@ -115,7 +119,7 @@ def build(bld):
         for tmain in tsources:
             uses = use + ['PTHREAD']
             includes = ['test']
-            if tmain.name.startswith("test_yamz_"):
+            if tmain.name.startswith("test_yamz"):
                 # depends on yamz internals
                 uses.insert(0, "yamz")
                 includes += ['inc', 'src']
@@ -125,6 +129,7 @@ def build(bld):
                         ut_cwd=bld.path,
                         install_path=None,
                         includes=includes,
+                        rpath=rpath + [bld.path.find_or_declare(bld.out_dir)],
                         use=uses)
 
     bld.add_post_fun(waf_unit_test.summary)

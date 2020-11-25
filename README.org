@@ -12,3 +12,99 @@
 
 - you develop in C++
 
+* Internals
+
+yamz provides an server/client network which is nominally expected to
+remain intra-application but could in principle be exposed across a
+larger context.  A client is some component in the application which
+may make a request on the server.  This *request message* consists of
+the following fields:
+
+- compid :: a name that self-identifies the requesting component.
+- binds :: a *list* of *concrete port* records, each with attributes:
+  - ztype :: a ZeroMQ *socket type name* ("PUB", "SUB", "PUSH" etc)
+  - portid :: a name identifying the socket in the context of the component
+  - addrs :: a *list* of *concrete addresses* the socket shall ~bind()~
+- conns :: a *list* of *abstract addresses* to be resolved
+
+The *reply message* back to the client consists of the following fields:
+
+- compid :: the *compid* from the corresponding *request* 
+- conns :: a *list* of *address resolution* records, each with attributes:
+  - abst :: the *abstract address*
+  - conc :: the *concrete address*
+
+We define:
+
+- concrete address :: any fully-specified ZeroMQ address.  In
+  particular, any wild cards that make an address ephemeral like
+  ~tcp://*:*~ are not concrete and must be fully qualified to a host
+  name or IP address and a port number such as ~tcp://127.0.0.1:5678~.
+
+- abstract address :: a *hierarchy name path* identifying a socket in
+  some context.  It is a string which represents a traversal through a
+  name-tree that expresses parentage.  The syntax uses slashes and so
+  looks like a relative file system path, for example
+  ~nodeid/compid/portid~.  Normally it will express a triplet with the
+  first name being the Zyre node name, the second being the component
+  identifier such as given in the *request message* and the last the
+  port identifier such as given in the request's *binds* attribute.
+
+The *server* operates in two modes, a *request mode* and a *reply mode*.  In
+the first mode it will collect *request messages* but not reply to them.
+When a *discovery criteria* is met, the server will transition to *reply
+mode*.  In reply mode, the server will respond to the clients with
+their *reply message*.  
+
+A number of *discovery criteria* are supported
+
+- if a list of *compid* is given to the server, the *discovery criteria*
+  will be satisfied a request from all listed components has been
+  received.
+
+- the application may explicitly signal the server that the *discovery
+  criteria* is met.
+
+Once in the *reply mode* the server will prepare a Zyre "peer" object
+and bring it "online" to the external network (distinct from the
+intra-application server/client yamz network).  When that occurs a
+Zyre ENTER event will be seen by all other Zyre peers with the
+following attributes:
+
+- node name :: the Zyre node name as provided to the server upon its construction
+
+- yamz header :: a Zyre header of key name *YAMZ* 
+
+The *YAMZ* Zyre header provides a *list* of *address resolution* records
+formed from the information in the *binds* attribute of all *request
+messages* received by the clients.  The *hierarchy path* of the *abstract
+address* is relative to and thus does not include the Zyre *node name*
+which would be common to all.
+
+Upon receiving a Zyre peer ENTER message, the yamz server will check
+for and if found parse the *YAMZ* header, append the peer's *node name* to
+each *abstract address* and store it associated to the corresponding
+*concrete address*.  It will then iterate the outstanding requests to
+determine if any requested the address for resolution.  Once a request
+is fully satisfied in this manner the server replies to the original
+client.
+
+The *YAMZ* header value is encoded in an attempt to follow the
+conventions of the syntax of some HTTP header values.  It is a list of
+elements separated by semicolons.  Each element is separated into two
+parts delimited by an equals.  The first part holds the abstract
+address of a port followed by a colon followed by the ZeroMQ socket
+type name.  The second part holds a list of concrete addresses
+delimited by comma.  For example:
+
+#+begin_example
+comp1/portA:PUB = tcp://127.0.0.1:8065, inproc://portA;
+comp1/portB:SUB = tcp://127.0.0.1:8064, inproc://portb;
+comp2/port:PUSH = ipc://comp2port.fifo
+#+end_example
+
+Spaces around delimiting characters (~=~, ~,~ or ~;~) are optional.  Line
+breaks are used above only for clarity and are not legal in an actual
+*YAMZ* header value.
+
+TBD: what do after all replies are completed?

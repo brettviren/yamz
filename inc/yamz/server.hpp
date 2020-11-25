@@ -6,9 +6,14 @@
 #include <vector>
 #include <string>
 #include <thread>
+#include <exception>
 
 namespace yamz {
 
+
+    struct server_error : public std::runtime_error {
+        server_error(const std::string& what) : std::runtime_error(what) {}
+    };
 
     class Server {
 
