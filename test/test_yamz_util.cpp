@@ -6,34 +6,27 @@
 
 int main()
 {
-    std::string header = "comp1 / portA : PUB= tcp://127.0.0.1:8065 ,inproc://portA; comp1/portB:SUB=tcp://127.0.0.1:8064,inproc://portb ;comp2/port:PUSH =ipc://comp2port.fifo";
+    std::string original = "comp1/portA=PUB, comp1/portB=SUB, comp2/port=PUSH";
+    auto res = yamz::parse_map(original);
 
-    auto res = yamz::parse_header(header);
-    std::string roundtrip="";
+    // now reconstruct
+    std::stringstream ss;
+    std::string comma = "";
+    for (const auto& [candp,ztype] : res) {
+        auto path = yamz::parse_list(candp, "/");
 
-    std::string semicolon = "";
-    for (const auto& one : res) {
-        for (auto& cp : one.second) {
-            roundtrip += semicolon;
-            semicolon = ";";
-            std::string key = one.first + "/" + cp.portid
-                + ":" + yamz::str(cp.ztype);
-            std::string val="";
-            std::string comma = "";
-            for (const auto& addr : cp.concs) {
-                val += comma + addr;
-                comma = ",";
-            }
-            roundtrip += key + "=" + val;
-        }
+        ss << comma << path[0] << "/" << path[1] << "=" << ztype;
+        comma = ", ";
     }
+    auto roundtrip = ss.str();
 
-    std::cerr << "original:  " << header << std::endl;
-    header.erase(std::remove_if(header.begin(), header.end(), isspace),
-                 header.end());
-    std::cerr << "spaceless: " << header << std::endl;
+    std::cerr << "original:  " << original << std::endl;
     std::cerr << "roundtrip: " << roundtrip << std::endl;
+    assert(roundtrip == original);
+    original.erase(std::remove_if(original.begin(), original.end(), isspace),
+                 original.end());
+    std::cerr << "spaceless: " << original << std::endl;
     
-    assert(roundtrip == header);
+
     return 0;
 }

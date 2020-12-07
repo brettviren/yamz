@@ -8,9 +8,6 @@ int main()
 
     {
         yamz::Server ys(ctx);
-        std::cerr << "server: set name, port" << std::endl;
-        ys.set_name("test");
-        ys.set_port(5678);
         std::cerr << "server: start" << std::endl;
         ys.start();
         std::cerr << "server: discover" << std::endl;

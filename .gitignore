@@ -3,3 +3,7 @@
 .lock-waf*
 build*
 cut
+.dir-locals.el
+.projectile
+README.html
+cut.*

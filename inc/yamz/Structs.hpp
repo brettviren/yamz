@@ -14,43 +14,55 @@
 
 namespace yamz {
 
-    // @brief An unique identifier
-    using Ident = std::string;
-
-    // @brief Abstractly identify a socket address
-    struct AbstractAddress {
-
-        // @brief Identify a node
-        Ident node = "";
-
-        // @brief Identify a node's component
-        Ident comp = "";
-
-        // @brief Identify a component's port
-        Ident port = "";
-    };
+    // @brief Abstract Address
+    using AbstractAddress = std::string;
 
     // @brief 
     using AbstractAddresses = std::vector<yamz::AbstractAddress>;
 
-    // @brief All addresses to resolve for one client port
-    struct AbstractPort {
-
-        // @brief Name of the clients port that wants to connect
-        Ident port = "";
-
-        // @brief Abstract addresses for server to match
-        AbstractAddresses addrs = {};
-    };
-
-    // @brief 
-    using AbstractPorts = std::vector<yamz::AbstractPort>;
+    // @brief An identifier or name
+    using Ident = std::string;
 
     // @brief Concrete address
     using ConcreteAddress = std::string;
 
     // @brief 
     using ConcreteAddresses = std::vector<yamz::ConcreteAddress>;
+
+    // @brief A key name
+    using Key = std::string;
+
+    // @brief An identity parameter value
+    using ParameterValue = std::string;
+
+    // @brief An identity parameter
+    struct IdentityParameter {
+
+        // @brief The key name of the parameter
+        Key key = "";
+
+        // @brief The value of the parameter
+        ParameterValue val = "";
+    };
+
+    // @brief 
+    using IdentityParameters = std::vector<yamz::IdentityParameter>;
+
+    // @brief An identity pattern value
+    using PatternValue = std::string;
+
+    // @brief An identity pattern
+    struct IdentityPattern {
+
+        // @brief The key name of the pattern
+        Key key = "";
+
+        // @brief The pattern string
+        PatternValue val = "";
+    };
+
+    // @brief 
+    using IdentityPatterns = std::vector<yamz::IdentityPattern>;
 
     // @brief Enumerate ZeroMQ socket names in canoncial order
     enum class SockType: unsigned {
@@ -125,49 +137,85 @@ namespace yamz {
         return def;
     }
 
-    // @brief An association of a port and its concrete addresses
-    struct ConcretePort {
+    // @brief Ephemeral Address
+    using EphemeralAddress = std::string;
 
-        // @brief Identify a port of the client
+    // @brief 
+    using EphemeralAddresses = std::vector<yamz::EphemeralAddress>;
+
+    // @brief Describe one client port
+    struct ClientPort {
+
+        // @brief Identify port to network and application
         Ident portid = "";
 
         // @brief The ZeroMQ socket type
         SockType ztype = yamz::SockType::PAIR;
 
-        // @brief Concrete addresses associated with port
-        ConcreteAddresses concs = {};
+        // @brief Any port-level identity parameters
+        IdentityParameters idparms = {};
+
+        // @brief Any port-level identity patterns
+        IdentityPatterns idpatts = {};
+
+        // @brief Ephemeral bind addresses
+        EphemeralAddresses binds = {};
+
+        // @brief Abstract connect addresses
+        AbstractAddresses conns = {};
     };
 
     // @brief 
-    using ConcretePorts = std::vector<yamz::ConcretePort>;
+    using ClientPorts = std::vector<yamz::ClientPort>;
 
-    // @brief YAMZ zyre header value
-    using Header = std::string;
+    // @brief A yamz client configuration object
+    struct ClientConfig {
+
+        // @brief The name by which the client is known in the node
+        Ident clientid = "";
+
+        // @brief The server addresses to which the client shall connect
+        ConcreteAddresses servers = {"inproc://yamz"};
+
+        // @brief Any client-level identity parameters
+        IdentityParameters idparms = {};
+
+        // @brief Any client-level identity patterns
+        IdentityPatterns idpatts = {};
+
+        // @brief Describe ports the client shall provide to application
+        ClientPorts ports = {};
+    };
+
+    // @brief 
+    using Idents = std::vector<yamz::Ident>;
 
     // @brief A hierarchy path
     using Path = std::string;
 
-    // @brief Request reply from server to client
-    struct Reply {
+    // @brief A IP port number
+    using PortNum = int32_t;
 
-        // @brief The requesting client component identity
-        Ident comp = "";
+    // @brief A yamz server configuration object
+    struct ServerConfig {
 
-        // @brief A set of concrete port addresses client may connect
-        ConcretePorts conns = {};
-    };
+        // @brief The name by which this yamz node is known on the network
+        Ident nodeid = "";
 
-    // @brief The structure of a client request made to a server
-    struct Request {
+        // @brief The IP port number on which Zyre operates
+        PortNum portnum = 5670;
 
-        // @brief Uniquely identify the client
-        Ident comp = "";
+        // @brief The addresses to which the server shall bind
+        ConcreteAddresses addresses = {"inproc://yamz"};
 
-        // @brief Concrete bind ports made by client
-        ConcretePorts binds = {};
+        // @brief Any node-level identity parameters
+        IdentityParameters idparms = {};
 
-        // @brief Abstract connect ports to be resolved by server
-        AbstractPorts conns = {};
+        // @brief Any node-level identity patterns
+        IdentityPatterns idpatts = {};
+
+        // @brief A set of peer nodes to expect to discover
+        Idents expected = {};
     };
 
 } // namespace yamz

@@ -2,109 +2,203 @@
 
 * Problem statement
 
-- you want an app-centric Zyre peer discovery mechanism with socket address resolution
+The problem is to answer these questions in a satisfactory way:
 
-- you want to specify addresses abstractly without carrying about  minor details such as IP and port numbers
+- How can an instance of my application know about other instances and
+  vice versa?
 
-- you have an application architecture where sockets are created in disjoint components
+- How can my application know about the addresses of sockets provided
+  by other applications and vice versa?
 
-- you have sockets created in their own threads
+- How can my application select among those sockets to find a subset
+  of interest?
 
-- you develop in C++
+- How can these interesting sockets be identified in a way that is
+  semantically meaningful to my application code?
 
-* Internals
+- How can my multi-threaded application use sockets safely?
 
-yamz provides an server/client network which is nominally expected to
-remain intra-application but could in principle be exposed across a
-larger context.  A client is some component in the application which
-may make a request on the server.  This *request message* consists of
-the following fields:
+- How can my application use abstract plugins which may not "know"
+  about my application but also wants to use sockets in these ways?
 
-- compid :: a name that self-identifies the requesting component.
-- binds :: a *list* of *concrete port* records, each with attributes:
-  - ztype :: a ZeroMQ *socket type name* ("PUB", "SUB", "PUSH" etc)
-  - portid :: a name identifying the socket in the context of the component
-  - addrs :: a *list* of *concrete addresses* the socket shall ~bind()~
-- conns :: a *list* of *abstract addresses* to be resolved
+- How do I do this in C++, but maybe also in other languages?
 
-The *reply message* back to the client consists of the following fields:
+* yamz Solution
 
-- compid :: the *compid* from the corresponding *request* 
-- conns :: a *list* of *address resolution* records, each with attributes:
-  - abst :: the *abstract address*
-  - conc :: the *concrete address*
+yamz answers these questions in a hopefully satisfying way.  
 
-We define:
+First, it uses the Zyre (ZRE) discovery mechanism to allow peers on
+the network to learn information about each other.  yamz uses Zyre
+publish information the application's sockets which ~bind()~ and from
+this information published by others it can learn which addresses the
+application sockets may ~connect()~.
 
-- concrete address :: any fully-specified ZeroMQ address.  In
-  particular, any wild cards that make an address ephemeral like
-  ~tcp://*:*~ are not concrete and must be fully qualified to a host
-  name or IP address and a port number such as ~tcp://127.0.0.1:5678~.
+ZeroMQ (non-draft) sockets are only thread-safe when kept to a single
+thread.  yamz thus orchestrates this discovery protocol in a way that
+allows sockets to be created in the threads that will use them.  This
+means socket creation can still be distributed throughout application
+components, and even abstract plugins, while presenting to the
+discovery network information as if it was from a single entity.
 
-- abstract address :: a *hierarchy name path* identifying a socket in
-  some context.  It is a string which represents a traversal through a
-  name-tree that expresses parentage.  The syntax uses slashes and so
-  looks like a relative file system path, for example
-  ~nodeid/compid/portid~.  Normally it will express a triplet with the
-  first name being the Zyre node name, the second being the component
-  identifier such as given in the *request message* and the last the
-  port identifier such as given in the request's *binds* attribute.
+Socket construction and their ~bind()~ and ~connect()~ becomes very
+uniform which minimizes the API to which application components must
+learn.  yamz takes this even further to allow the application
+components to have zero-configuration sockets.  yamz can receive its
+configuration directly and application developers need only agree on
+names for their sockets.  In cases where more fine-grained
+configuration control is required, yamz provides methods for it.
 
-The *server* operates in two modes, a *request mode* and a *reply mode*.  In
-the first mode it will collect *request messages* but not reply to them.
-When a *discovery criteria* is met, the server will transition to *reply
-mode*.  In reply mode, the server will respond to the clients with
-their *reply message*.  
+In order to supply all this, yamz sets up a tiny *intra-application*
+network.  Nominally this network is based on ZeroMQ ~inproc~ transport
+so that traffic remains in memory of the application.  Being based on
+ZeroMQ it is possible to instead or in addition use other transports.
 
-A number of *discovery criteria* are supported
+At the center of this network is the yamz server which mediates
+between Zyre and a number of clients.  Each distinct application
+component which needs one or more sockets may uses a simple yamz
+client API to simple get them, ready-to-use.  As the network involves
+asynchronous message passing while typical application code prefers to
+work with synchronous APIs, both the server and client are provided
+with an outward synchronous facade to an asynchronous backend.
 
-- if a list of *compid* is given to the server, the *discovery criteria*
-  will be satisfied a request from all listed components has been
-  received.
 
-- the application may explicitly signal the server that the *discovery
-  criteria* is met.
+* Client API walkthrough
 
-Once in the *reply mode* the server will prepare a Zyre "peer" object
-and bring it "online" to the external network (distinct from the
-intra-application server/client yamz network).  When that occurs a
-Zyre ENTER event will be seen by all other Zyre peers with the
-following attributes:
 
-- node name :: the Zyre node name as provided to the server upon its construction
+* Server API walkthrough
 
-- yamz header :: a Zyre header of key name *YAMZ* 
+* Socket Addressing
 
-The *YAMZ* Zyre header provides a *list* of *address resolution* records
-formed from the information in the *binds* attribute of all *request
-messages* received by the clients.  The *hierarchy path* of the *abstract
-address* is relative to and thus does not include the Zyre *node name*
-which would be common to all.
+yamz uses URIs to identify sockets.
 
-Upon receiving a Zyre peer ENTER message, the yamz server will check
-for and if found parse the *YAMZ* header, append the peer's *node name* to
-each *abstract address* and store it associated to the corresponding
-*concrete address*.  It will then iterate the outstanding requests to
-determine if any requested the address for resolution.  Once a request
-is fully satisfied in this manner the server replies to the original
-client.
+** Address Categories
 
-The *YAMZ* header value is encoded in an attempt to follow the
-conventions of the syntax of some HTTP header values.  It is a list of
-elements separated by semicolons.  Each element is separated into two
-parts delimited by an equals.  The first part holds the abstract
-address of a port followed by a colon followed by the ZeroMQ socket
-type name.  The second part holds a list of concrete addresses
-delimited by comma.  For example:
+Depending on the form and intent of the information provided by a URI,
+it is interpreted as being in one of three categories.
+
+- Concrete :: Any fully-qualified address in one of the supported
+  ZeroMQ URI schemes (~tcp~, ~ipc~ and ~inproc~).  It is fully-qualified in
+  that it contains no wildcard character.  A *concrete* address may be
+  given for either a ~bind()~ or a ~connect()~.
+
+- Ephemeral :: Any address given in one of the supported ZeroMQ URI
+  schemes which has at least one wildcard character ("~*~").  An
+  *ephemeral* address may only be given for a ~bind()~.  In the process of
+  performing a ~bind()~ with an ephermal address, yamz will construct a
+  corresponding *concrete* address.  Note, a concrete address may be
+  used in place of an ephemeral one.
+
+- Abstract :: An address given with a URI scheme of ~yamz~.  It may be
+  resolved into zero or more concrete addresses through the yamz
+  discovery process.  An *abstract* address may only be given for the
+  intention of applying a ~connect()~ to all resolved concrete
+  addresses.  
+
+All address categories URIs may have a *query* part which is described below.
+
+** ~yamz://~ URI scheme
+
+As above, the ~yamz~ URI scheme is only meaningful for specifying
+abstract addresses.  They are resolved to a set of concrete addresses
+by yamz and to each a ~connect()~ will be applied.  
+
+The ~yamz~ URI (omitting the *query* part) is generally:
 
 #+begin_example
-comp1/portA:PUB = tcp://127.0.0.1:8065, inproc://portA;
-comp1/portB:SUB = tcp://127.0.0.1:8064, inproc://portb;
-comp2/port:PUSH = ipc://comp2port.fifo
+yamz://[node]/[path]
 #+end_example
 
-Spaces around delimiting characters (~=~, ~,~ or ~;~) are optional.  Line
-breaks are used above only for clarity and are not legal in an actual
-*YAMZ* header value.
+The parts are interpreted as:
 
-TBD: what do after all replies are completed?
+- node :: the name for a zyre peer, required but wildcard allowed,
+
+- path :: a /-separated path locating a node's socket, required but elements may be provided by wildcards.
+
+The ~yamz~ scheme allows the *nade* and elements of the *path* to be
+specified with the wildcard character ("~*~").  Some examples:
+
+- ~yamz://*/log~ would match all sockets named "log" for all nodes
+- ~yamz://friend/*/out~ would match all sockets named "out" in all components of node "friend"
+- ~yamz://friend/fanout/*~ would match all sockets from component "fanout" of node "friend".
+
+Note, the wildcard does not match element separators but maybe one day
+we support ant glob.  See next for other ways to match.
+
+** Query parameters
+
+For a *concrete* or *ephemeral* ~bind()~ address, the query part specifies a
+set of key/value attributes to associate with the address in yamz
+discovery.
+
+For an *abstract* ~connect()~ address, the query part specifies /matches/
+(regular expressions) to apply against key/value attributes in yamz
+discovery.  
+
+For example, a ~bind()~ address for a socket that provides a source of
+"TPC trigger primitive" objects which derive from some portion of a
+larger data source (part, det, apa, face) may be specified like:
+
+#+begin_example
+tcp://*:*?part=2&det=tpc&role=tpsource&apa=42&face=1
+#+end_example
+
+Another socket may wish to connect to a subset of all such sockets
+over all faces of multiple APAs and might do so by specifying an
+abstract address like:
+
+#+begin_example
+yamz://*/tps?part=2&det=tpc&apa=4[12]
+#+end_example
+
+Where, in this invented world, the socket name ~tps~ implies the role
+~tpsource~.  Note, the ~yamz::Server~ may be given a collection of
+"expected" peer nodes.  If so, the wildcard for the node ~yamz://*~ will
+match within this subset.
+
+* Discovery
+
+yamz discovery is based on Zyre which implements the concept of a
+fully connected graph.  Every node added to the graph knows about
+every other node.  An instance of ~yamz::Server~ is associated with
+one node and makes known some of the information it has collected from
+the instances of ~yamz::Client~ requests it has received.  From the
+information published by other nodes, the ~yamz::Server~ will attempt
+to satisfy the outstanding client requests.
+
+An application can make a number of ~yamz::Server~ instances.
+However, it is typically sufficient for one process to have but one as
+a single yamz node can take care of complex internal structure.  For
+example the application may have yamz clients distributed through
+"components", "modules", "plugins", etc.
+
+The application developer need not understand the details of yamz
+discovery and instead focus on the simple ~yamz::Server~ and/or
+~yamz::Client~ class API.  The details that follow will be important
+for any compatible implementation of yamz that does not use ~libyamz~.
+
+** ~YAMZ~ Header
+
+yamz publishes in the Zyre ENTER event a header named ~YAMZ~.  The
+value of this header is a JSON encoded string.  Loading the JSON
+results in a tree structure that maps to the application structure as
+reported by the yamz client requests.
+
+Every vertex of this tree is an object following ~yamz::TreeVtx~ schema
+and having attributes:
+
+- name :: (required) a simple string identifier unique to all sibling vertices
+- port :: (optional) a description of a bind socket of type ~yamz::TreePort~
+- params :: (optiona) zero or more key/value pairs, each as free-form strings, each of type ~yamz::TreeParam~
+- children :: (optional) sequence of zero or more child vertices
+
+Parameters may be provided directly to the ~yamz::Server~ instance or
+through client requests.  Parameters are taken to assert information
+about the vertex's *port* (if it exists) and to any children vertices.
+A parameter in a child vertex is taken to override any of the same
+name found in ancestor vertices.
+
+** Other yamz headers
+
+yamz may define additional headers and reserves them to begin with a
+~YAMZ~ prefix.
+
