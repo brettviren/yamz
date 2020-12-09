@@ -4,7 +4,6 @@
 #include "yamz/Nljs.hpp"
 
 #include "server_data.hpp"
-#include "server_logic.hpp"
 #include "server_actor.hpp"
 
 #include <map>
