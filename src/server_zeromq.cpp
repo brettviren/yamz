@@ -8,6 +8,9 @@ using namespace yamz::server;
 std::vector<RemoteAddress> yamz::server::from_zyre(yamz::ZyreEvent& zev)
 {
     std::vector<RemoteAddress> ret;
+    if (zev.type() != "ENTER") {
+        return ret;
+    }
 
     auto nodeid = zev.peer_name();
 

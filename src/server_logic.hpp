@@ -69,6 +69,15 @@ namespace yamz::server {
 
         // Accept a message from a client
         void accept_client(remid_t remid, yamz::ClientConfig cc);
+
+        // Return true if the expected request criteria is not yet met.
+        bool outstanding() const { return false; }
+
+        // Force the expected request criteria as met.
+        void set_expected() { };
+
+        // Return true if we think we've discovered all we can.
+        bool discovered();
     };
 
 }
