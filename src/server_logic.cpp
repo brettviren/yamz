@@ -1,8 +1,11 @@
 #include "server_logic.hpp"
+#include "server_zeromq.hpp"
 #include <yamz/uri.hpp>
 #include <yamz/server.hpp>
 
 #include <set>
+
+#include <iostream>             // debug
 
 using namespace yamz::server;
 
@@ -52,16 +55,37 @@ yamz::server::parse_abstract(yamz::server::MatchAddress& ma,
     }
 }
 
-ServerLogic::ServerLogic(const yamz::ServerConfig& cfg)
-    : config(cfg)
+yamz::server::Logic::Logic(zmq::context_t& ctx, const yamz::ServerConfig& cfg,
+                           const std::string& linkname)
+
+    : ctx(ctx), cfg(cfg), zyre(cfg.nodeid)
 {
-    // YAMZ-PARAMS : a=b,c=d
-    for (const auto& [key,val] : config.idparms) {
-        headers.parms[""].push_back(key + "=" + val);
-    }
+    // Prime "us" with what app tells us about server
+    us.nodeid = cfg.nodeid;
+    us.idparms = cfg.idparms; 
+
+    // Link back to synchronous API
+    link = zmq::socket_t(ctx, zmq::socket_type::pair);
+    link.connect(linkname);
+
+    // Server socket
+    sock = zmq::socket_t(ctx, zmq::socket_type::server);
+    for (auto& addr : cfg.addresses) {
+        std::cerr << "server actor: bind: " << addr << std::endl;
+        sock.bind(addr);
+    }    
+
+    // Link to zyre, but we don't start yet
+    zyre.set_portnum(cfg.portnum);
+
+    // notify API it can continue
+    std::cerr << "server actor: sending ready" << std::endl;
+    link.send(zmq::message_t{}, zmq::send_flags::none);
 }
 
-void ServerLogic::update(remid_t rid, std::string clid, std::string portid, std::string address) {
+
+
+void yamz::server::Logic::update(remid_t rid, std::string clid, std::string portid, std::string address) {
     auto it = requests.find(rid);
     if (it == requests.end()) {
         throw server_error("internal logic error, no client " + clid);
@@ -80,65 +104,32 @@ void ServerLogic::update(remid_t rid, std::string clid, std::string portid, std:
     throw server_error(ss.str());
 }
 
-void ServerLogic::process()
-{
-    for (const auto& ma : tomatch) {
-        for (const auto& ra : remotes) {
-            if (! match(ma, ra)) {
-                update(ma.remid, ma.clid, ma.clportid, ra.address);
-            }
-        }
-    }
-}
 
-
-void ServerLogic::accept_peer(const RemoteAddress& ma)
+void yamz::server::Logic::accept_peer(const RemoteAddress& ma)
 {
     remotes.push_back(ma);
 }
 
-void ServerLogic::accept_client(remid_t remid, yamz::ClientConfig cc)
+void yamz::server::Logic::accept_client(remid_t remid,
+                                        const yamz::ClientConfig& cc)
 {
 
-    // YAMZ-PARAMS-<clientid> : a=b,c=d
-    for (const auto& cp : cc.idparms) {
-        std::stringstream ss;
-        ss << cp.key << "=" << cp.val;
-        headers.parms[cc.clientid].push_back(ss.str());
-    }
+    yamz::YamzClient yc{cc.clientid, cc.idparms};
 
-    // take one pass through each port to collect bind related
-    // info to send out to zyre and abstract conn related info for
-    // later matching.
+    // take one pass through each port to collect bind-related info
+    // for zyre and conn-related info for later matching.
+
+    auto cli_patts = append(cfg.idpatts, cc.idpatts);
 
     for (auto& port : cc.ports) {
 
-        // <clientid>/<portid>
-        std::string cpid = cc.clientid + "/" + port.portid;
+        // remember contribution to Zyre
+        yamz::YamzPort yp{port.portid, port.ztype, port.idparms, port.binds};
 
-        /* First, the bind parts */
-
-        // YAMZ-PARAMS-comp2/port : a=b,c=d
-        for (const auto& pp : port.idparms) {
-            std::stringstream ss;
-            ss << pp.key << "=" << pp.val;
-            headers.parms[cpid].push_back(ss.str());
-        }
-
-        // YAMZ-PORTS : comp1/portA=PUB,comp1/portB=SUB,comp2/port=PUSH
-        headers.ports.push_back(cpid + "=" + yamz::str(port.ztype) );
-
-        // YAMZ-BINDS-comp1/portA : tcp://127.0.0.1:8065, inproc://portA
-        for (auto& addr : port.binds) {
-            headers.binds[cpid].push_back(addr);
-        }
-
-        /* Then, the connect parts */
-
-        auto cli_patts = append(config.idpatts, cc.idpatts);
-
+        // remember connect parts with patts rolled down to the
+        // address level.
         auto port_patts = append(cli_patts, port.idpatts);
-        std::vector<std::string> tokeep;
+
         for (auto& addr : port.conns) {
             if (yamz::is_abstract(addr)) {
                 MatchAddress ma{cc.clientid, port.portid, remid};
@@ -148,14 +139,66 @@ void ServerLogic::accept_client(remid_t remid, yamz::ClientConfig cc)
                 }
                 // and finally any info in the abstract address itself
                 parse_abstract(ma, addr);
-                tomatch.push_back(ma);
+                tomatch[remid].push_back(ma);
             }
             else { 
-                tokeep.push_back(addr);
+                // Client sent us a concrete connection address which
+                // we will echo back next chance.
+                yamz::ClientReply rep{port.portid,
+                    yamz::ClientAction::connect, addr};
+                tosend[remid].push_back(rep);
             }
         }
-        port.conns = tokeep;
     }
     requests[remid] = cc;
 }
 
+void yamz::server::Logic::do_matching()
+{
+    // if offline then return
+    // check tomatch against zyre, update tosend, purge tomatch
+
+    // for (const auto& [remid, mas] : tomatch) {
+    //     for (const auto& ra : remotes) {
+    //         if (! match(ma, ra)) {
+    //             update(ma.remid, ma.clid, ma.clportid, ra.address);
+    //         }
+    //     }
+    // }
+
+}
+void yamz::server::Logic::send_ready()
+{
+    // drain tosend
+}
+
+void yamz::server::Logic::go_online() 
+{
+}
+void yamz::server::Logic::go_offline() 
+{
+}
+void yamz::server::Logic::store_request() 
+{
+    // We have a client request waiting.  Receive it and store.
+    yamz::ClientConfig cc;
+    auto remid = yamz::server::recv_type(sock, cc);
+    accept_client(remid, cc);
+    do_matching();
+    send_ready();
+}
+void yamz::server::Logic::add_peer() 
+{
+}
+void yamz::server::Logic::del_peer() 
+{
+}
+void yamz::server::Logic::notify_clients() 
+{
+}
+bool yamz::server::Logic::have_clients()
+{
+    // if offline, return false
+    // apply "expected" criteria
+    return true;
+}

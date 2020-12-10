@@ -1,34 +1,32 @@
 #include "yamz/server.hpp"
-#include "yamz/zyre.hpp"
-#include "yamz/util.hpp"
-#include "yamz/Nljs.hpp"
 
-#include "server_data.hpp"
 #include "server_actor.hpp"
-
-#include <map>
-#include <regex>
+#include "server_logic.hpp"
 
 #include <iostream>             // debugging
 
 
 yamz::Server::Server(zmq::context_t& ctx,
                      const ServerConfig& cfg)
-    : params{ctx, cfg}
+    : ctx{ctx}, cfg{cfg}
+{
+}
+
+void yamz::Server::start()
 {
     std::stringstream ss;
     ss << "inproc://yamz-server-"
        << cfg.nodeid << "-" << cfg.portnum << "-"
        << std::hex << this;
-    params.linkname = ss.str();
-}
+    std::string linkname = ss.str();
 
-void yamz::Server::start()
-{
-    alink = zmq::socket_t(params.ctx, zmq::socket_type::pair);
-    alink.bind(params.linkname);
+    alink = zmq::socket_t(ctx, zmq::socket_type::pair);
+    alink.bind(linkname);
 
-    athread = std::thread(yamz::server::server_actor, params);
+    yamz::server::ActorArgs aa {ctx, cfg, linkname};
+    athread = std::thread([&](){
+        yamz::server::actor(aa);
+    });
 
     // CZMQ compatible convention, wait for actor to signal ready
     zmq::message_t msg;

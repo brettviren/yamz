@@ -18,7 +18,13 @@ namespace yamz::server {
      * The actor function providing asynchronous service to the
      * yamz::Server API.
      */
-    void server_actor(yamz::Server::Params params);
+    struct ActorArgs {
+        zmq::context_t& ctx;
+        const yamz::ServerConfig& cfg;
+        const std::string& linkname;
+    };
+    void actor(ActorArgs& aa);
+
 }
 
 #endif

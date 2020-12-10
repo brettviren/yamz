@@ -96,6 +96,10 @@ namespace yamz {
             zyre_set_header(peer, key.c_str(), "%s", val.c_str());
         }
 
+        void set_portnum(int portnum = 5670) {
+            zyre_set_port(peer, portnum);
+        }
+
         zmq::socket_ref socket() {
             // downcast from zyre->zsock->void* and upcast to zmq::socket_ref.
             void* low = zsock_resolve(zyre_socket(peer));

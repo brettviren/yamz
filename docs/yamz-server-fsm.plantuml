@@ -1,0 +1,21 @@
+@startuml
+state Running {
+[*] --> Collecting
+state Collecting {
+        [*] -> CollReady
+        CollReady --> CollProc : REQUEST / store_request
+        CollProc --> Discovery : [have_clients] / go_online
+        CollProc --> CollReady : [need_clients]
+}
+state Discovery {
+        [*] --> DiscReady
+        DiscReady --> DiscProc : ENTER / add_peer
+        DiscReady --> DiscProc : EXIT / del_peer        
+        DiscProc --> DiscReady : / notify_clients
+        DiscReady -> DiscProc : REQUEST / store_request
+}
+}
+Collecting -> Discovery: ONLINE / go_online
+Discovery -> Collecting: OFFLINE / go_offline
+Running -> [*] : TERMINATE / notify_clients
+@enduml

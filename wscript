@@ -46,10 +46,12 @@ def configure(cfg):
     if nljs:
         print("using " + nljs)
         setattr(cfg.env, 'INCLUDES_NLJS', [osp.join(nljs, "include")])
-
     cfg.check(features='cxx cxxprogram', define_name='HAVE_NLJS',
               header_name='nlohmann/json.hpp',
               use='NLJS', uselib_store='NLJS', mandatory=True)
+    # fixme: fallback to vendored version
+    # fixme: add cppzmq
+    # fixme: add sml
 
     # libzmq
     zmq = getattr(cfg.options, "with_libzmq", None)
@@ -105,7 +107,7 @@ def build(bld):
 
     sources = bld.path.ant_glob('src/*.cpp')
     bld.shlib(features='cxx',
-              includes='inc',
+              includes='inc inc/cppzmq',
               rpath=rpath,
               source=sources, target='yamz',
               uselib_store='YAMZ', use=use)
@@ -122,7 +124,7 @@ def build(bld):
             if tmain.name.startswith("test_yamz"):
                 # depends on yamz internals
                 uses.insert(0, "yamz")
-                includes += ['inc', 'src']
+                includes += ['inc', 'inc/cppzmq', 'src']
 
             bld.program(features=features,
                         source=[tmain], target=tmain.name.replace('.cpp', ''),

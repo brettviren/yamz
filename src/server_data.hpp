@@ -9,6 +9,7 @@ namespace yamz::server {
 
     // structures for the server actor
 
+
     // This is uint32_t for SERVER and std::string for ROUTER.  If we
     // used ZIO we wouldn't have to expose ourselves to this detail.
     using remid_t = uint32_t;
@@ -38,6 +39,7 @@ namespace yamz::server {
         // The query portion
         psetmap_t patts;
     };
+    using MatchAddresses = std::vector<MatchAddress>;
 
     /**
        Intermediate storage of what goes into a set of Zyre headers

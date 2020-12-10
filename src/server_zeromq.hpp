@@ -3,12 +3,27 @@
 
 #include "yamz/zyre.hpp"
 #include "yamz/zeromq.hpp"
-#include "yamz/Structs.hpp"
+#include "yamz/Nljs.hpp"
+#include "yamz/server.hpp"
 #include "server_data.hpp"
 
 namespace yamz::server {
 
 
+    template<typename Type>
+    remid_t recv_type(zmq::socket_t& sock, Type& obj) {
+        zmq::message_t msg;
+        auto res = sock.recv(msg, zmq::recv_flags::none);
+        if (!res) { throw yamz::server_error("failed to receive"); }
+
+        // note, we assume SERVER, not ROUTER.
+        remid_t rid = msg.routing_id();
+
+        auto sreq = msg.to_string();
+        auto jobj = yamz::data_t::parse(sreq);
+        obj = jobj.get<Type>();
+        return rid;
+    }
 
     // Parse a zyre event to fill a RemoteAddress
     std::vector<RemoteAddress> from_zyre(yamz::ZyreEvent& zev);

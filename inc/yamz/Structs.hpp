@@ -20,6 +20,73 @@ namespace yamz {
     // @brief 
     using AbstractAddresses = std::vector<yamz::AbstractAddress>;
 
+    // @brief 
+    enum class ApiCommands: unsigned {
+        terminate,
+        online,
+        offline,
+    };
+    // return a string representation of a ApiCommands.
+    inline
+    const char* str(ApiCommands val) {
+        if (val == ApiCommands::terminate) { return "terminate" ;}
+        if (val == ApiCommands::online) { return "online" ;}
+        if (val == ApiCommands::offline) { return "offline" ;}
+        return "";                  // should not reach
+    }
+    inline
+    ApiCommands parse_ApiCommands(std::string val, ApiCommands def = ApiCommands::terminate) {
+        if (val == "terminate") { return ApiCommands::terminate; }
+        if (val == "online") { return ApiCommands::online; }
+        if (val == "offline") { return ApiCommands::offline; }
+        return def;
+    }
+
+    // @brief A command from server API to actor
+    struct ApiCommand {
+
+        // @brief 
+        ApiCommands command = yamz::ApiCommands::terminate;
+    };
+
+    // @brief 
+    enum class ApiReply: unsigned {
+        fail,
+        okay,
+    };
+    // return a string representation of a ApiReply.
+    inline
+    const char* str(ApiReply val) {
+        if (val == ApiReply::fail) { return "fail" ;}
+        if (val == ApiReply::okay) { return "okay" ;}
+        return "";                  // should not reach
+    }
+    inline
+    ApiReply parse_ApiReply(std::string val, ApiReply def = ApiReply::fail) {
+        if (val == "fail") { return ApiReply::fail; }
+        if (val == "okay") { return ApiReply::okay; }
+        return def;
+    }
+
+    // @brief 
+    enum class ClientAction: unsigned {
+        connect,
+        disconnect,
+    };
+    // return a string representation of a ClientAction.
+    inline
+    const char* str(ClientAction val) {
+        if (val == ClientAction::connect) { return "connect" ;}
+        if (val == ClientAction::disconnect) { return "disconnect" ;}
+        return "";                  // should not reach
+    }
+    inline
+    ClientAction parse_ClientAction(std::string val, ClientAction def = ClientAction::connect) {
+        if (val == "connect") { return ClientAction::connect; }
+        if (val == "disconnect") { return ClientAction::disconnect; }
+        return def;
+    }
+
     // @brief An identifier or name
     using Ident = std::string;
 
@@ -187,14 +254,52 @@ namespace yamz {
         ClientPorts ports = {};
     };
 
+    // @brief A reply sent to a client
+    struct ClientReply {
+
+        // @brief Identify client port
+        Ident portid = "";
+
+        // @brief What action the client should take on port
+        ClientAction action = yamz::ClientAction::connect;
+
+        // @brief The addresses to act on with to the port
+        ConcreteAddress address = "";
+    };
+
+    // @brief 
+    using ClientReplies = std::vector<yamz::ClientReply>;
+
+    // @brief Processing client requests
+    struct CollProc {
+    };
+
+    // @brief Ready for collection of client requests
+    struct CollReady {
+    };
+
+    // @brief Processing of zyre events
+    struct DiscProc {
+    };
+
+    // @brief Ready for Zyre events
+    struct DiscReady {
+    };
+
     // @brief 
     using Idents = std::vector<yamz::Ident>;
+
+    // @brief 
+    using NanoSecs = int32_t;
 
     // @brief A hierarchy path
     using Path = std::string;
 
     // @brief A IP port number
     using PortNum = int32_t;
+
+    // @brief 
+    using Secs = int64_t;
 
     // @brief A yamz server configuration object
     struct ServerConfig {
@@ -216,6 +321,118 @@ namespace yamz {
 
         // @brief A set of peer nodes to expect to discover
         Idents expected = {};
+    };
+
+    // @brief Seconds since Unix epoch and nanoseconds since second
+    struct UnixTime {
+
+        // @brief 
+        Secs s = 0;
+
+        // @brief 
+        NanoSecs ns = 0;
+    };
+
+    // @brief The discovered information about a peer client port
+    struct YamzPort {
+
+        // @brief 
+        Ident portid = "";
+
+        // @brief 
+        SockType ztype = yamz::SockType::PAIR;
+
+        // @brief 
+        IdentityParameters idparms = {};
+
+        // @brief 
+        ConcreteAddresses addresses = {};
+    };
+
+    // @brief 
+    using YamzPorts = std::vector<yamz::YamzPort>;
+
+    // @brief The discovered information about a peer client
+    struct YamzClient {
+
+        // @brief 
+        Ident clientid = "";
+
+        // @brief 
+        IdentityParameters idparms = {};
+
+        // @brief 
+        YamzPorts ports = {};
+    };
+
+    // @brief 
+    using YamzClients = std::vector<yamz::YamzClient>;
+
+    // @brief The discovered information about a peer
+    struct YamzPeer {
+
+        // @brief 
+        Ident nodeid = "";
+
+        // @brief 
+        IdentityParameters idparms = {};
+
+        // @brief 
+        YamzClients clients = {};
+    };
+
+    // @brief Bring zyre offline
+    struct evOffline {
+
+        // @brief 
+        UnixTime stamp = {};
+    };
+
+    // @brief Bring zyre online
+    struct evOnline {
+
+        // @brief 
+        UnixTime stamp = {};
+    };
+
+    // @brief A zyre ENTER event
+    struct evPeerEnter {
+
+        // @brief 
+        UnixTime stamp = {};
+
+        // @brief 
+        Ident peer = "";
+
+        // @brief 
+        YamzPeer info = {};
+    };
+
+    // @brief A zyre ENTER event
+    struct evPeerExit {
+
+        // @brief 
+        UnixTime stamp = {};
+
+        // @brief 
+        Ident peer = "";
+    };
+
+    // @brief Client requests
+    struct evRequest {
+
+        // @brief 
+        UnixTime stamp = {};
+
+        // @brief 
+        ClientConfig clireq = {};
+    };
+
+    // @brief Terminate
+    struct evTerminate {
+
+        // @brief 
+        UnixTime stamp = {};
     };
 
 } // namespace yamz

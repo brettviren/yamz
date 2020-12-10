@@ -58,18 +58,14 @@ namespace yamz {
         */
         bool discover();
 
-        // Bundle info to simplify sharing with actor function.
-        struct Params {
-            zmq::context_t& ctx;
-            ServerConfig cfg;
-            std::string linkname{""}; 
-        };
-
       private:
+
+        zmq::context_t& ctx;
+        yamz::ServerConfig cfg;
 
         std::thread athread;
         zmq::socket_t alink;
-        Params params;
+
 
     };
 

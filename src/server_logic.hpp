@@ -12,6 +12,7 @@
 #include "server_data.hpp"
 
 #include <yamz/util.hpp>
+#include <yamz/zyre.hpp>
 #include <yamz/Structs.hpp>
 
 #include <string>
@@ -31,25 +32,51 @@ namespace yamz::server {
     void parse_abstract(MatchAddress& ma, const std::string& addr);
 
     // This struct holds server logic, separate from any socketry
-    struct ServerLogic {
+    struct Logic {
 
-        // Collect yamz Zyre header info from each request.  socketry part
-        // will turn this into zyre message
-        YamZyreHeaders headers;
+        zmq::context_t& ctx;
+        yamz::ServerConfig cfg;
 
-        // The server configuration object;
-        yamz::ServerConfig config;
+        zmq::socket_t link, sock;
+        yamz::Zyre zyre;
 
-        ServerLogic(const yamz::ServerConfig& cfg);
+        // collect what we know about ourself and our clients
+        yamz::YamzPeer us;
 
+        // associate a client to any outstanding replies
+        std::map<remid_t, yamz::ClientReplies> tosend;
+
+        // associate a client to its requests.
+        std::map<remid_t, MatchAddresses> tomatch;
+
+        // // Collect yamz Zyre header info from each request.  socketry part
+        // // will turn this into zyre message
+        // YamZyreHeaders headers;
+
+
+        Logic(zmq::context_t& ctx, const yamz::ServerConfig& cfg,
+              const std::string& linkname);
+
+
+        // guards
+        bool have_clients();
+
+        // Actions
+        void go_online();
+        void go_offline();
+        void store_request();
+        void add_peer();
+        void del_peer();
+        void notify_clients();
+
+        // Internal actions
+        void do_matching();
+        void send_ready();
 
         // Main working data are in the form of client configuration
         // objects.
         using requests_t = std::map<remid_t, yamz::ClientConfig>;
         requests_t requests;
-
-        // Intermediate data holding client requested abstract address matching
-        std::vector<MatchAddress> tomatch;
 
         // Capture peer info
         std::vector<RemoteAddress> remotes;
@@ -59,16 +86,11 @@ namespace yamz::server {
         void update(remid_t rid, std::string clid, std::string portid,
                     std::string address);
 
-        // Compare all MatchAddreses to all RemoteAddresses.  Any
-        // matches result in concrete addresses added to the corresponding
-        // client port conns list.
-        void process();
-
         // Accept a message from a Zyre peer
         void accept_peer(const RemoteAddress& ma);
 
         // Accept a message from a client
-        void accept_client(remid_t remid, yamz::ClientConfig cc);
+        void accept_client(remid_t remid, const yamz::ClientConfig& cc);
 
         // Return true if the expected request criteria is not yet met.
         bool outstanding() const { return false; }

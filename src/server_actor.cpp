@@ -1,188 +1,143 @@
 #include "server_actor.hpp"
-#include "server_zeromq.hpp"
 #include "server_logic.hpp"
-
 #include <yamz/server.hpp>
+#include <yamz/Structs.hpp>
 
-#include <iostream>
+#include <boost/sml.hpp>
+namespace sml = boost::sml;
 
-using namespace yamz::server;
 
-static
-std::string link_hit(ServerLogic& guts, zmq::socket_t& link)
+// define the server FSM
+namespace {
+
+    // All the events and states are just markers
+
+    // events
+    struct ServerOnline{};
+    struct ServerOffline{};
+    struct ServerTerminate{};
+    struct ClientRequest{};
+    struct PeerEnter{};
+    struct PeerExit{};
+
+    // states
+    auto Cready = sml::state<class Cready>;
+    auto Cproc = sml::state<class CProc>;
+    auto Dready = sml::state<class Dready>;
+    auto Dproc = sml::state<class Dproc>;
+
+    // forward actions to server::Logic
+    const auto go_online = [](yamz::server::Logic& guts) { guts.go_online(); };
+    const auto go_offline = [](yamz::server::Logic& guts) { guts.go_offline(); };
+    const auto store_request = [](yamz::server::Logic& guts) {
+        guts.store_request();
+    };
+    const auto add_peer = [](yamz::server::Logic& guts) { guts.add_peer(); };
+    const auto del_peer = [](yamz::server::Logic& guts) { guts.del_peer(); };
+    const auto notify_clients = [](yamz::server::Logic& guts) {
+        guts.notify_clients();
+    };
+
+    // forward guards to server::Logic 
+    const auto have_clients = [](yamz::server::Logic& guts) {
+        return guts.have_clients();
+    };
+
+    struct Discovery;
+
+    struct Collecting {
+        auto operator()() {
+            using namespace boost::sml;
+            return make_transition_table(
+// clang-format: off
+* Cready + event<ClientRequest> / store_request = Cproc
+, Cproc [ ! have_clients ] = Cready
+, Cproc [ have_clients ] / go_online = state<Discovery>
+// clang-format: on
+                );
+        }
+    };
+
+    struct Discovery {
+        auto operator()() {
+            using namespace boost::sml;
+            return make_transition_table(
+// clang-format: off
+* Dready + event<ClientRequest> / store_request = Dproc
+, Dready + event<PeerEnter> / add_peer = Dproc
+, Dready + event<PeerExit> / del_peer = Dproc
+, Dproc / notify_clients = Dready
+// clang-format: on
+                );
+        }
+    };
+
+    struct Running {
+        auto operator()() {
+            using namespace boost::sml;
+
+            return make_transition_table(
+// clang-format: off
+* state<Collecting> + event<ServerOnline> / go_online = state<Discovery>
+, state<Discovery> + event<ServerOffline> / go_offline = state<Collecting>
+// clang-format: on
+                );
+        }
+    };
+}
+
+using FSM = sml::sm<Running>;
+
+static void
+handle_link(FSM& fsm, yamz::server::Logic& guts)
 {
     zmq::message_t msg;
-    auto res = link.recv(msg, zmq::recv_flags::none);
+    auto res = guts.link.recv(msg, zmq::recv_flags::none);
     if (!res) {
-        throw yamz::server_error("Failed to recv on link");
+        throw yamz::server_error("recv on link failed");
     }
     auto cmd = msg.to_string();
-    std::cerr << "server actor: command: " << cmd << std::endl;
-    if (cmd == "ONLINE") {
-        std::string rep = "OKAY";
-        if (guts.outstanding()) {
-            rep = "FAIL";
-        }
-        guts.set_expected();    // link tells us so
-        std::cerr << "server actor: send phase 1 ONLINE ack: "
-                  << rep << std::endl;
-        auto sres = link.send(zmq::message_t(rep),
-                              zmq::send_flags::none);
-        if (!sres) {
-            throw yamz::server_error("Failed to ack ONLINE " + rep);
-        }
-        return "ONLINE";
-    }
-    // we should terminate asap
-    return "$TERM";
 }
 
-static
-void request_hit(ServerLogic& guts, zmq::socket_t& sock)
+static void
+handle_sock(FSM& fsm, yamz::server::Logic& guts)
 {
-    // yamz::ClientConfig cc;
-    // auto remid = yamz::server::recv(sock, cc);
-    // guts.accept_peer(remid, cc);
 }
 
-// returns false to terminate
-static
-std::string request_phase(ServerLogic& guts,
-                          zmq::socket_t& link, zmq::socket_t& sock)
+static void
+handle_zyre(FSM& fsm, yamz::server::Logic& guts)
 {
-    zmq::poller_t<> poller;
-    poller.add(link, zmq::event_flags::pollin);
-    poller.add(sock, zmq::event_flags::pollin);
-    std::vector<zmq::poller_event<>> events(2);
-    bool receiving = true;
-    while (receiving) {
-        const int nevents = poller.wait_all(events, std::chrono::milliseconds{-1});
-        for (int iev = 0; iev < nevents; ++iev) {
-
-            if (events[iev].socket == link) {
-                // link hit always kills request phase
-                // it's either go ONLINE or terminate.
-                return link_hit(guts, link);
-             }
-
-            if (events[iev].socket == sock) {
-                request_hit(guts, sock);
-            }
-        }
-        receiving = guts.outstanding();
-    }
-    return "DONE";
 }
 
-static void terminate(zmq::socket_t& link, bool wait)
+void yamz::server::actor(ActorArgs& aa)
 {
-    // should wait unles it was API that told us to die
-    if (wait) {               
-        zmq::message_t die;
-        auto res = link.recv(die);
-        res = {};               // don't care
-    }
+    yamz::server::Logic guts(aa.ctx, aa.cfg, aa.linkname);
+    FSM fsm{guts};
 
-    // ack
-    zmq::message_t die;
-    auto res = link.send(die, zmq::send_flags::none);    
-    res = {};                   // don't care.
-}
-
-static void zyre_hit(ServerLogic& guts, yamz::Zyre& zyre)
-{
-    auto zev = zyre.event();
-    auto ras = yamz::server::from_zyre(zev);
-    if (ras.empty()) {
-        return;
-    }
-
-    for (auto& ra : ras) {
-        guts.accept_peer(ra);
-    }
-}
-
-static std::string discovery_phase(ServerLogic& guts, zmq::socket_t& link)
-{
-    yamz::Zyre zyre(guts.config.nodeid);
-    yamz::server::tell_zyre(zyre, guts.headers);
-    auto zsock = zyre.socket();
+    // We now sit in a loop polling sockets for messages, converting
+    // messages to events and processing events into the FSM.
 
     zmq::poller_t<> poller;
-    poller.add(link, zmq::event_flags::pollin);
+    poller.add(guts.link, zmq::event_flags::pollin);
+    poller.add(guts.sock, zmq::event_flags::pollin);
+    auto zsock = guts.zyre.socket();
     poller.add(zsock, zmq::event_flags::pollin);
-    std::vector<zmq::poller_event<>> events(2);
+    std::vector<zmq::poller_event<>> events(3);
 
-    zyre.start();
-
-    bool receiving = true;
-    while (receiving) {
-        const int nevents = poller.wait_all(events, std::chrono::milliseconds{-1});
-        for (int iev = 0; iev < nevents; ++iev) {
-
-            if (events[iev].socket == link) {
-                // link hit always kills request phase
-                // it's either go ONLINE or terminate.
-                auto got = link_hit(guts, link);
-                if (got == "$TERM") {
-                    return got;
-                }
-                // ONLINE was just a query at this point
-            }
-
-            if (events[iev].socket == zsock) {
-                zyre_hit(guts, zyre);
-            }
-
-            
+    const int nevents = poller.wait_all(events, std::chrono::milliseconds{-1});
+    for (int iev = 0; iev < nevents; ++iev) {
+        if (events[iev].socket == guts.link) {
+            handle_link(fsm, guts);
+            continue;
         }
-    }
-    return "";
-}
-
-static std::string reply_phase(ServerLogic& guts,
-                               zmq::socket_t& link, zmq::socket_t& sock)
-{
-    return "";
-}
-
-void yamz::server::server_actor(yamz::Server::Params params)
-{
-    ServerLogic guts(params.cfg);
-
-    // Link back to synchronous API
-    zmq::socket_t link(params.ctx, zmq::socket_type::pair);
-    link.connect(params.linkname);
-
-    // Server socket
-    zmq::socket_t sock(params.ctx, zmq::socket_type::server);
-    for (auto& addr : params.cfg.addresses) {
-        std::cerr << "server actor: bind: " << addr << std::endl;
-        sock.bind(addr);
+        if (events[iev].socket == guts.sock) {
+            handle_sock(fsm, guts);
+            continue;
+        }
+        if (events[iev].socket == zsock) {
+            handle_zyre(fsm, guts);
+            continue;
+        }
     }    
-
-    // notify API it can continue
-    std::cerr << "server actor: sending ready" << std::endl;
-    link.send(zmq::message_t{}, zmq::send_flags::none);
-
-    {
-        auto got = request_phase(guts, link, sock);
-        if (got == "$TERM") {
-            terminate(link, false);
-            return;
-        }
-        // ONLINE or DONE, just keep going
-    }
-
-    {
-        auto got = discovery_phase(guts, link);
-        if (got == "$TERM") {
-            terminate(link, false);
-            return;
-        }
-    }        
-
-    reply_phase(guts, link, sock);
-    
 }
 
