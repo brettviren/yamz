@@ -132,52 +132,10 @@ local yamz = {
     ], doc="A reply sent to a client"),
     clirpls: s.sequence("ClientReplies", self.clirpl),
 
-    // The server actor behavior implements an explicate FSM.
-
-    // States
-    s_collready : s.record("CollReady",
-                           doc="Ready for collection of client requests"),
-    s_collproc : s.record("CollProc",
-                          doc="Processing client requests"),
-    s_discready : s.record("DiscReady",
-                           doc="Ready for Zyre events"),
-    s_discproc : s.record("DiscProc",
-                          doc="Processing of zyre events"),
-
-    // events corresponding to API commands
-    ev_online : s.record("evOnline", [
-        s.field("stamp", self.sns),
-    ], doc="Bring zyre online"),
-    ev_offline : s.record("evOffline", [
-        s.field("stamp", self.sns),
-    ], doc="Bring zyre offline"),
-    ev_term: s.record("evTerminate", [
-        s.field("stamp", self.sns),
-    ], doc="Terminate"),
-
-    // event corresponding to a new request
-    ev_request : s.record("evRequest", [
-        s.field("stamp", self.sns),
-        s.field("clireq", self.client_cfg),
-    ], doc="Client requests"),
-
-    // event corresponding to a zyre ENTER event
-    ev_enter : s.record("evPeerEnter", [
-        s.field("stamp", self.sns),
-        s.field("peer", self.ident),
-        s.field("info", self.yamz_peer),
-    ], doc="A zyre ENTER event"),
-    // event corresponding to a zyre EXIT event
-    ev_exit : s.record("evPeerExit", [
-        s.field("stamp", self.sns),
-        s.field("peer", self.ident),
-    ], doc="A zyre ENTER event"),
-        
 
     // Zyre ENTER events carry a header "YAMZ" with a value in this
-    // structure:
+    // structure.  The nodeid held by the zyre node nick name
     yamz_peer: s.record("YamzPeer", [
-        s.field("nodeid", self.ident),
         s.field("idparms", self.ident_parms),
         s.field("clients", self.yamz_clients),
     ], doc="The discovered information about a peer"),

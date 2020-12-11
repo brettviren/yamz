@@ -17,8 +17,12 @@ namespace {
     struct ServerOffline{};
     struct ServerTerminate{};
     struct ClientRequest{};
-    struct PeerEnter{};
-    struct PeerExit{};
+    struct PeerEnter{
+        yamz::ZyreEvent zev;
+    };
+    struct PeerExit{
+        yamz::ZyreEvent zev;
+    };
 
     // states
     auto Cready = sml::state<class Cready>;
@@ -32,8 +36,12 @@ namespace {
     const auto store_request = [](yamz::server::Logic& guts) {
         guts.store_request();
     };
-    const auto add_peer = [](yamz::server::Logic& guts) { guts.add_peer(); };
-    const auto del_peer = [](yamz::server::Logic& guts) { guts.del_peer(); };
+    const auto add_peer = [](yamz::server::Logic& guts, PeerEnter& pe) {
+        guts.add_peer(pe.zev);
+    };
+    const auto del_peer = [](yamz::server::Logic& guts, PeerExit& pe) {
+        guts.del_peer(pe.zev);
+    };
     const auto notify_clients = [](yamz::server::Logic& guts) {
         guts.notify_clients();
     };
@@ -91,22 +99,37 @@ using FSM = sml::sm<Running>;
 static void
 handle_link(FSM& fsm, yamz::server::Logic& guts)
 {
-    zmq::message_t msg;
-    auto res = guts.link.recv(msg, zmq::recv_flags::none);
-    if (!res) {
-        throw yamz::server_error("recv on link failed");
+    auto cmd = guts.recv_link();
+    if (cmd == "ONLINE") {
+        fsm.process_event(ServerOnline{});
+        return;
     }
-    auto cmd = msg.to_string();
+    if (cmd == "OFFLINE") {
+        fsm.process_event(ServerOffline{});
+        return;
+    }
+    fsm.process_event(ServerTerminate{});
 }
 
 static void
 handle_sock(FSM& fsm, yamz::server::Logic& guts)
 {
+    fsm.process_event(ClientRequest{});
 }
 
 static void
 handle_zyre(FSM& fsm, yamz::server::Logic& guts)
 {
+    auto zev = guts.recv_zyre();
+    if (zev.type() == "ENTER") {
+        fsm.process_event(PeerEnter{std::move(zev)});
+        return;
+    }
+    if (zev.type() == "EXIT") {
+        fsm.process_event(PeerExit{std::move(zev)});
+        return;
+    }
+    // any other event types, we just quietly ignore
 }
 
 void yamz::server::actor(ActorArgs& aa)

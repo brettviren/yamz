@@ -5,10 +5,10 @@
 #include "yamz/zeromq.hpp"
 #include "yamz/Nljs.hpp"
 #include "yamz/server.hpp"
-#include "server_data.hpp"
 
 namespace yamz::server {
 
+    using remid_t = uint32_t;
 
     template<typename Type>
     remid_t recv_type(zmq::socket_t& sock, Type& obj) {
@@ -24,12 +24,6 @@ namespace yamz::server {
         obj = jobj.get<Type>();
         return rid;
     }
-
-    // Parse a zyre event to fill a RemoteAddress
-    std::vector<RemoteAddress> from_zyre(yamz::ZyreEvent& zev);
-
-    // Inform zyre of the headers.
-    void tell_zyre(yamz::Zyre& zyre, const YamZyreHeaders& headers);
 
     // Recieve from socket, filling cc, return remid
     remid_t recv(zmq::socket_t& sock, yamz::ClientConfig& cc);

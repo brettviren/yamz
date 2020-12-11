@@ -147,30 +147,6 @@ namespace yamz {
             j.at("address").get_to(obj.address);    
     }
     
-    inline void to_json(data_t& j, const CollProc& obj) {
-    }
-    
-    inline void from_json(const data_t& j, CollProc& obj) {
-    }
-    
-    inline void to_json(data_t& j, const CollReady& obj) {
-    }
-    
-    inline void from_json(const data_t& j, CollReady& obj) {
-    }
-    
-    inline void to_json(data_t& j, const DiscProc& obj) {
-    }
-    
-    inline void from_json(const data_t& j, DiscProc& obj) {
-    }
-    
-    inline void to_json(data_t& j, const DiscReady& obj) {
-    }
-    
-    inline void from_json(const data_t& j, DiscReady& obj) {
-    }
-    
     inline void to_json(data_t& j, const ServerConfig& obj) {
         j["nodeid"] = obj.nodeid;
         j["portnum"] = obj.portnum;
@@ -241,84 +217,15 @@ namespace yamz {
     }
     
     inline void to_json(data_t& j, const YamzPeer& obj) {
-        j["nodeid"] = obj.nodeid;
         j["idparms"] = obj.idparms;
         j["clients"] = obj.clients;
     }
     
     inline void from_json(const data_t& j, YamzPeer& obj) {
-        if (j.contains("nodeid"))
-            j.at("nodeid").get_to(obj.nodeid);    
         if (j.contains("idparms"))
             j.at("idparms").get_to(obj.idparms);    
         if (j.contains("clients"))
             j.at("clients").get_to(obj.clients);    
-    }
-    
-    inline void to_json(data_t& j, const evOffline& obj) {
-        j["stamp"] = obj.stamp;
-    }
-    
-    inline void from_json(const data_t& j, evOffline& obj) {
-        if (j.contains("stamp"))
-            j.at("stamp").get_to(obj.stamp);    
-    }
-    
-    inline void to_json(data_t& j, const evOnline& obj) {
-        j["stamp"] = obj.stamp;
-    }
-    
-    inline void from_json(const data_t& j, evOnline& obj) {
-        if (j.contains("stamp"))
-            j.at("stamp").get_to(obj.stamp);    
-    }
-    
-    inline void to_json(data_t& j, const evPeerEnter& obj) {
-        j["stamp"] = obj.stamp;
-        j["peer"] = obj.peer;
-        j["info"] = obj.info;
-    }
-    
-    inline void from_json(const data_t& j, evPeerEnter& obj) {
-        if (j.contains("stamp"))
-            j.at("stamp").get_to(obj.stamp);    
-        if (j.contains("peer"))
-            j.at("peer").get_to(obj.peer);    
-        if (j.contains("info"))
-            j.at("info").get_to(obj.info);    
-    }
-    
-    inline void to_json(data_t& j, const evPeerExit& obj) {
-        j["stamp"] = obj.stamp;
-        j["peer"] = obj.peer;
-    }
-    
-    inline void from_json(const data_t& j, evPeerExit& obj) {
-        if (j.contains("stamp"))
-            j.at("stamp").get_to(obj.stamp);    
-        if (j.contains("peer"))
-            j.at("peer").get_to(obj.peer);    
-    }
-    
-    inline void to_json(data_t& j, const evRequest& obj) {
-        j["stamp"] = obj.stamp;
-        j["clireq"] = obj.clireq;
-    }
-    
-    inline void from_json(const data_t& j, evRequest& obj) {
-        if (j.contains("stamp"))
-            j.at("stamp").get_to(obj.stamp);    
-        if (j.contains("clireq"))
-            j.at("clireq").get_to(obj.clireq);    
-    }
-    
-    inline void to_json(data_t& j, const evTerminate& obj) {
-        j["stamp"] = obj.stamp;
-    }
-    
-    inline void from_json(const data_t& j, evTerminate& obj) {
-        if (j.contains("stamp"))
-            j.at("stamp").get_to(obj.stamp);    
     }
     
     // fixme: add support for MessagePack serializers (at least)

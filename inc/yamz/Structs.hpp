@@ -270,22 +270,6 @@ namespace yamz {
     // @brief 
     using ClientReplies = std::vector<yamz::ClientReply>;
 
-    // @brief Processing client requests
-    struct CollProc {
-    };
-
-    // @brief Ready for collection of client requests
-    struct CollReady {
-    };
-
-    // @brief Processing of zyre events
-    struct DiscProc {
-    };
-
-    // @brief Ready for Zyre events
-    struct DiscReady {
-    };
-
     // @brief 
     using Idents = std::vector<yamz::Ident>;
 
@@ -372,67 +356,10 @@ namespace yamz {
     struct YamzPeer {
 
         // @brief 
-        Ident nodeid = "";
-
-        // @brief 
         IdentityParameters idparms = {};
 
         // @brief 
         YamzClients clients = {};
-    };
-
-    // @brief Bring zyre offline
-    struct evOffline {
-
-        // @brief 
-        UnixTime stamp = {};
-    };
-
-    // @brief Bring zyre online
-    struct evOnline {
-
-        // @brief 
-        UnixTime stamp = {};
-    };
-
-    // @brief A zyre ENTER event
-    struct evPeerEnter {
-
-        // @brief 
-        UnixTime stamp = {};
-
-        // @brief 
-        Ident peer = "";
-
-        // @brief 
-        YamzPeer info = {};
-    };
-
-    // @brief A zyre ENTER event
-    struct evPeerExit {
-
-        // @brief 
-        UnixTime stamp = {};
-
-        // @brief 
-        Ident peer = "";
-    };
-
-    // @brief Client requests
-    struct evRequest {
-
-        // @brief 
-        UnixTime stamp = {};
-
-        // @brief 
-        ClientConfig clireq = {};
-    };
-
-    // @brief Terminate
-    struct evTerminate {
-
-        // @brief 
-        UnixTime stamp = {};
     };
 
 } // namespace yamz

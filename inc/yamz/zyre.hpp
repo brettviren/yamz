@@ -53,6 +53,13 @@ namespace yamz {
             return "";
         }
 
+        std::string peer_uuid()
+        {
+            const char *s = zyre_event_peer_uuid(evt);
+            if (s) { return s; }
+            return "";
+        }
+
         std::string peer_addr() {
             const char *s = zyre_event_peer_addr(evt);
             if (s) { return s; }
