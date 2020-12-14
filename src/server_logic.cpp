@@ -102,8 +102,8 @@ void yamz::server::Logic::accept_client(remid_t remid,
             else { 
                 // Client sent us a concrete connection address which
                 // we will echo back next chance.
-                yamz::ClientReply rep{port.portid,
-                    yamz::ClientAction::connect, addr};
+                yamz::ClientReply rep{yamz::ClientAction::connect,
+                    port.portid, addr};
                 ci.tosend.push_back(rep);
             }
         }
@@ -135,7 +135,7 @@ void Logic::match_address(Logic::MatchAddress& ma, yamz::ClientAction ca)
                 break;
             }
             // a winner
-            ci->tosend.emplace_back(ClientReply{ma.clportid, ca, ra.address});
+            ci->tosend.emplace_back(ClientReply{ca, ma.clportid, ra.address});
         }
     }
 }
@@ -152,18 +152,48 @@ void yamz::server::Logic::do_matching(yamz::ClientAction ca)
 
     notify_clients();
 }
+void yamz::server::Logic::notify_clients() 
+{
+    // Here we drain any filled "tosend" arrays of the clients by
+    // sending the contents as individual replies.  
+
+    for (auto& ci : clients.infos) {
+        for (const auto& rep : ci.tosend) {
+            yamz::data_t jobj = rep;
+            zmq::message_t msg(jobj.dump());
+            auto res = sock.send(msg, zmq::send_flags::none);
+            if (!res) {
+                throw server_error("failed to reply to client " + ci.nick);
+            }
+        }
+        // maybe: is there any reason to remember what we sent?
+        ci.tosend.clear();
+    }
+}
 void yamz::server::Logic::go_online() 
 {
-    // 0. check if meet "expected"
-    // 1. start zyre
-    // 2. inform clients
-    // 3. reply to actor link with result of "expected"
+    if (zyre_online) { return; }
+    bool gotem = have_clients();
+    zyre.online();
+    // maybe: inform clients
+    std::string rep = gotem ? "OKAY" : "FAIL";
+    zmq::message_t msg{rep};
+    auto res = link.send(msg, zmq::send_flags::none);
+    if (!res) {
+        throw server_error("failed to send command online ack to API");
+    }
 }
 void yamz::server::Logic::go_offline() 
 {
-    // 1. stop zyre
-    // 2. inform clients
-    // 3. reply to actor link
+    if (!zyre_online) { return; }
+    zyre.offline();
+    // maybe: inform clients?
+    std::string rep = "OKAY";
+    zmq::message_t msg(rep);
+    auto res = link.send(msg, zmq::send_flags::none);
+    if (!res) {
+        throw server_error("failed to send command offline ack to API");
+    }
 }
 void yamz::server::Logic::store_request() 
 {
@@ -187,9 +217,8 @@ void yamz::server::Logic::add_peer(yamz::ZyreEvent& zev)
 
     auto yp = jobj.get<yamz::YamzPeer>();
 
-    Logic::PeerInfo pi{zuuid, znick, zaddr};
+    Logic::PeerInfo pi{zuuid, znick, zaddr, server_clock::now()};
 
-    std::vector<RemoteAddress> ras;
     for (const auto& client : yp.clients) {
         auto client_parms = append(yp.idparms, client.idparms);
         for (const auto& port : client.ports) {
@@ -216,15 +245,12 @@ void yamz::server::Logic::del_peer(yamz::ZyreEvent& zev)
     auto ruuid = zev.peer_uuid();
     auto it = them.find(ruuid);
     if (it == them.end()) {
-        return;
+        // never heard of them, somehow Zyre broke
+        // maybe: add warning?
+        return;                 
     }
     them.erase(it);
-
     do_matching(yamz::ClientAction::disconnect);
-}
-void yamz::server::Logic::notify_clients() 
-{
-    // Drain tosend
 }
 bool yamz::server::Logic::have_clients()
 {

@@ -69,12 +69,16 @@ local yamz = {
         s.field("ztype", self.socktype,
                 doc="The ZeroMQ socket type"),
         s.field("idparms", self.ident_parms,
+                default=[],
                 doc="Any port-level identity parameters"),
         s.field("idpatts", self.ident_patts,
+                default=[],
                 doc="Any port-level identity patterns"),
         s.field("binds", self.epheaddrs,
+                default=[],
                 doc="Ephemeral bind addresses"),
         s.field("conns", self.abstaddrs,
+                default=[],
                 doc="Abstract connect addresses"),
     ], doc="Describe one client port"),
     client_ports: s.sequence("ClientPorts", self.client_port),
@@ -84,16 +88,19 @@ local yamz = {
     client_cfg: s.record("ClientConfig", [
         s.field("clientid", self.ident,
                 doc="The name by which the client is known in the node"),
-        s.field("servers", self.concaddrs, default=["inproc://yamz"],
+        s.field("servers", self.concaddrs,
+                default=["inproc://yamz"],
                 doc="The server addresses to which the client shall connect"),
         s.field("idparms", self.ident_parms,
+                default=[],
                 doc="Any client-level identity parameters"),
         s.field("idpatts", self.ident_patts,
+                default=[],
                 doc="Any client-level identity patterns"),
         s.field("ports", self.client_ports,
                 doc="Describe ports the client shall provide to application")
     ], doc="A yamz client configuration object"),
-
+    client_cfgs: s.sequence("ClientConfigs", self.client_cfg),
 
     // Server config
     server_cfg: s.record("ServerConfig", [
@@ -104,10 +111,13 @@ local yamz = {
         s.field("addresses", self.concaddrs, default=["inproc://yamz"],
                 doc="The addresses to which the server shall bind"),
         s.field("idparms", self.ident_parms,
+                default=[],
                 doc="Any node-level identity parameters"),
         s.field("idpatts", self.ident_patts,
+                default=[],
                 doc="Any node-level identity patterns"),
         s.field("expected", self.idents,
+                default=[],
                 doc="A set of peer nodes to expect to discover"),
     ], doc="A yamz server configuration object"),
 
@@ -121,12 +131,13 @@ local yamz = {
     apirpl: s.enum("ApiReply", symbols=["fail","okay"]),
 
     // The server actor has an asynchronous protocol with clients.
+    // maybe:  add "online" and "offline"
     cliact: s.enum("ClientAction", symbols=["connect", "disconnect"]),
     clirpl: s.record("ClientReply", [
-        s.field("portid", self.ident,
-                doc="Identify client port"),
         s.field("action", self.cliact,
                 doc="What action the client should take on port"),
+        s.field("portid", self.ident,
+                doc="Identify client port"),
         s.field("address", self.concaddr,
                 doc="The addresses to act on with to the port"),
     ], doc="A reply sent to a client"),
@@ -153,6 +164,19 @@ local yamz = {
     ], doc="The discovered information about a peer client port"),
     yamz_ports: s.sequence("YamzPorts", self.yamz_port),
         
+
+    // for test_yamz_cluster
+    test_treq: s.record("TestTimeRequest", [
+        s.field("reqtime", self.sns, doc="Time of request"),
+    ], doc="Make a request for a remote time"),
+    test_trep: s.record("TestTimeReply", [
+        s.field("reptime", self.sns, doc="Time of reply"),
+        s.field("reqtime", self.sns, doc="Echo back request time"),
+    ], doc="Reply to a time request"),
+    test_job: s.record("TestJobCfg", [
+        s.field("server", self.server_cfg),
+        s.field("clients", self.client_cfgs)
+    ], doc="Overall configuration object for test_yamz_cluster")
 
 };
 moo.oschema.sort_select(yamz)

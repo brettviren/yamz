@@ -133,16 +133,16 @@ namespace yamz {
     }
     
     inline void to_json(data_t& j, const ClientReply& obj) {
-        j["portid"] = obj.portid;
         j["action"] = obj.action;
+        j["portid"] = obj.portid;
         j["address"] = obj.address;
     }
     
     inline void from_json(const data_t& j, ClientReply& obj) {
-        if (j.contains("portid"))
-            j.at("portid").get_to(obj.portid);    
         if (j.contains("action"))
             j.at("action").get_to(obj.action);    
+        if (j.contains("portid"))
+            j.at("portid").get_to(obj.portid);    
         if (j.contains("address"))
             j.at("address").get_to(obj.address);    
     }
@@ -171,6 +171,18 @@ namespace yamz {
             j.at("expected").get_to(obj.expected);    
     }
     
+    inline void to_json(data_t& j, const TestJobCfg& obj) {
+        j["server"] = obj.server;
+        j["clients"] = obj.clients;
+    }
+    
+    inline void from_json(const data_t& j, TestJobCfg& obj) {
+        if (j.contains("server"))
+            j.at("server").get_to(obj.server);    
+        if (j.contains("clients"))
+            j.at("clients").get_to(obj.clients);    
+    }
+    
     inline void to_json(data_t& j, const UnixTime& obj) {
         j["s"] = obj.s;
         j["ns"] = obj.ns;
@@ -181,6 +193,27 @@ namespace yamz {
             j.at("s").get_to(obj.s);    
         if (j.contains("ns"))
             j.at("ns").get_to(obj.ns);    
+    }
+    
+    inline void to_json(data_t& j, const TestTimeReply& obj) {
+        j["reptime"] = obj.reptime;
+        j["reqtime"] = obj.reqtime;
+    }
+    
+    inline void from_json(const data_t& j, TestTimeReply& obj) {
+        if (j.contains("reptime"))
+            j.at("reptime").get_to(obj.reptime);    
+        if (j.contains("reqtime"))
+            j.at("reqtime").get_to(obj.reqtime);    
+    }
+    
+    inline void to_json(data_t& j, const TestTimeRequest& obj) {
+        j["reqtime"] = obj.reqtime;
+    }
+    
+    inline void from_json(const data_t& j, TestTimeRequest& obj) {
+        if (j.contains("reqtime"))
+            j.at("reqtime").get_to(obj.reqtime);    
     }
     
     inline void to_json(data_t& j, const YamzPort& obj) {

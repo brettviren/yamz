@@ -37,23 +37,30 @@ void yamz::Server::start()
     std::cerr << "server: actor started" << std::endl;
 }
 
-bool yamz::Server::discover()
+bool yamz::Server::online()
 {
-    std::string ol = "ONLINE";
-    zmq::message_t msg(ol);
-    std::cerr << "server: going into discovery mode" << std::endl;
+    auto got = command("ONLINE");
+    return got == "OKAY";
+}
+bool yamz::Server::offline()
+{
+    auto got = command("OFFLINE");
+    return got == "OKAY";
+}
+
+std::string yamz::Server::command(std::string cmd)
+{
+    zmq::message_t msg(cmd);
     auto res = alink.send(msg, zmq::send_flags::none);
     if (!res) {
-        throw yamz::server_error("Failed to send ONLINE");
+        throw yamz::server_error("Failed to send " + cmd);
     }
 
     auto sres = alink.recv(msg);
     if (!sres) {
-        throw yamz::server_error("Failed to recv ONLINE ack");
+        throw yamz::server_error("Failed to recv ack for " + cmd);
     }
-    std::cerr << "server: discovery mode: " << msg.to_string() << std::endl;
-
-    return msg.to_string() == "OKAY";
+    return msg.to_string();
 }
 
 yamz::Server::~Server()

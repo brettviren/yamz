@@ -18,6 +18,8 @@ namespace yamz {
     /**
        yamz::Client provides no fuss access to discovery and resulting
        ready-to-use sockets.
+
+       It is a semi-synchronous API.  See discover().
     */
     class Client {
       public:
@@ -33,52 +35,33 @@ namespace yamz {
         Client(zmq::context_t& ctx, const ClientConfig& cfg = {});
         ~Client();
 
-        /** Update the configuration with another.
+        Client(const Client&) = delete;
+        Client operator=(const Client&) = delete;
+
+        /** Check for any replies from server.
+         *  
+         *  Return true if a the server responded before the timeout.
+         *  A negative timeout will block forever.
+         *
+         *  This method must be called periodically in order to
+         *  discover any newly arrived peers.
+         *
+         *  For general thread-safe use of the sockets, this method
+         *  must be called in the same thread as may later call get().
          */
-        void configure(const ClientConfig& cfg);
+        bool discover(std::chrono::milliseconds
+                      timeout=std::chrono::milliseconds(0));
 
-        /** Make discovery request to yamz::Server.
-            
-            Return true if a the server responded before the timeout.
-            A negative timeout will block forever.
 
-            This method may and should be called subsequent times
-            until returning true in order to assure a reply from the
-            server is received.
-
-            This method must be called in the same thread as may later call
-            get().
+        /** Return reference to socket associated with named port
+         *
+         *  Throws client_errror if port does not exist.
+         *
+         *  For general thread-safe use of the socket, this method
+         *  must be called in the same thread as which called
+         *  discover().
          */
-        bool discover(std::chrono::milliseconds timeout=std::chrono::milliseconds(-1));
-
-        /** Publish binds to server request but do not wait for any reply.
-
-            This requires all connect addresses to be concrete.
-
-            This should only be called once and excludes calling discover().
-
-            This method must be called in the same thread as may later call
-            get().
-        */
-        void publish();
-
-        /** Eschew discovery entirely directly make sockets.
-            
-            This requires all connect addresses to be concrete.
-
-            This shoudl only be called once and excludes calling discovery.
-
-            This method must be called in the same thread as may later call
-            get().
-         */
-        void direct();
-
-        /** Return socket associated with named port
-            
-            This method must be called in the same thread as which called
-            discover(), publish() or direct().
-         */
-        zmq::socket_ref get(std::string port);
+        zmq::socket_t& get(std::string port);
 
     private:
         zmq::context_t& ctx;
@@ -94,12 +77,8 @@ namespace yamz {
         // -->sets socks.size() != 0
         void do_binds();
         bool bound{false};
-        void try_recv(std::chrono::milliseconds timeout);
-        bool recved{false};
         void make_request();
         bool requested{false};
-        void do_conns();
-        bool conned{false};
     };
 
 }

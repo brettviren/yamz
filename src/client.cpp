@@ -5,21 +5,21 @@
 yamz::Client::Client(zmq::context_t& ctx, const yamz::ClientConfig& newcfg)
     : ctx(ctx), cfg(newcfg)
 {
+    connect_server();
+    make_socks();
+    do_binds();
+    make_request();
 }
 yamz::Client::~Client()
 {
 }
 
-void yamz::Client::configure(const ClientConfig& newcfg)
-{
-    cfg = newcfg;
-}
 
-zmq::socket_ref yamz::Client::get(std::string portid)
+zmq::socket_t& yamz::Client::get(std::string portid)
 {
     auto it = socks.find(portid);
     if ( it == socks.end() ) {
-        return zmq::socket_ref{};
+        throw yamz::client_error("client has no such port: " + portid);
     }
     return it->second;
 }
@@ -67,27 +67,6 @@ void yamz::Client::do_binds()
     bound = true;
 }
 
-void yamz::Client::do_conns()
-{
-    if (conned) { return; }
-
-    for (auto& port : cfg.ports) {
-        auto& sock = socks[port.portid];
-        for (auto addr : port.conns) {
-            if (addr.find("*") != addr.npos) {
-                throw yamz::client_error("ephemeral connect address: " + addr);
-            }
-            auto uri = yamz::uri::parse(addr);
-            if (uri.scheme == "yamz") {
-                throw yamz::client_error("abstract connect address: " + addr);
-            }
-            addr = yamz::str(uri, false); // sans any query
-            sock.connect(addr);
-        }
-    }
-    conned = true;
-}
-
 void yamz::Client::connect_server()
 {
     if (clisock) { return; }
@@ -112,47 +91,30 @@ void yamz::Client::make_request()
     requested = true;
 }
 
-void yamz::Client::try_recv(std::chrono::milliseconds timeout)
+bool yamz::Client::discover(std::chrono::milliseconds timeout)
 {
-    if (recved) { return; }
-
     clisock.set(zmq::sockopt::rcvtimeo, static_cast<int>(timeout.count()));
     zmq::message_t msg;
     auto res = clisock.recv(msg, zmq::recv_flags::none);
     if (!res) {
-        recved = false;
-        return;
+        return false;           // timeout
     }
-    configure(yamz::data_t::parse(msg.to_string()).get<yamz::ClientConfig>());
-    recved = true;
-}
+    auto jobj = yamz::data_t::parse(msg.to_string());
+    auto rep = jobj.get<yamz::ClientReply>();
 
-bool yamz::Client::discover(std::chrono::milliseconds timeout)
-{
-    connect_server();
-    make_socks();
-    do_binds();
-    make_request();
-    try_recv(timeout);
-    if (!recved) {
-        return false;           // caller must try again later
+    auto it = socks.find(rep.portid);
+    if (it == socks.end()) {
+        throw yamz::client_error("yamz server gave unknown port: " + rep.portid);
     }
-    do_conns();
-    return true;
+    auto& sock = it->second;
+    if (rep.action == yamz::ClientAction::connect) {
+        sock.connect(rep.address);
+        return true;
+    }
+    if (rep.action == yamz::ClientAction::disconnect) {
+        sock.disconnect(rep.address);
+        return true;
+    }
+    throw yamz::client_error("yamz server gave unknown reply");
 }
 
-void yamz::Client::publish()
-{
-    connect_server();
-    make_socks();
-    do_binds();
-    make_request();
-    do_conns();
-}
-
-void yamz::Client::direct()
-{
-    make_socks();
-    do_binds();
-    do_conns();
-}

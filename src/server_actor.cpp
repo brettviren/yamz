@@ -147,20 +147,22 @@ void yamz::server::actor(ActorArgs& aa)
     poller.add(zsock, zmq::event_flags::pollin);
     std::vector<zmq::poller_event<>> events(3);
 
-    const int nevents = poller.wait_all(events, std::chrono::milliseconds{-1});
-    for (int iev = 0; iev < nevents; ++iev) {
-        if (events[iev].socket == guts.link) {
-            handle_link(fsm, guts);
-            continue;
-        }
-        if (events[iev].socket == guts.sock) {
-            handle_sock(fsm, guts);
-            continue;
-        }
-        if (events[iev].socket == zsock) {
-            handle_zyre(fsm, guts);
-            continue;
-        }
-    }    
+    while (true) {              // fixme: make way to break
+        const int nevents = poller.wait_all(events, std::chrono::milliseconds{-1});
+        for (int iev = 0; iev < nevents; ++iev) {
+            if (events[iev].socket == guts.link) {
+                handle_link(fsm, guts);
+                continue;
+            }
+            if (events[iev].socket == guts.sock) {
+                handle_sock(fsm, guts);
+                continue;
+            }
+            if (events[iev].socket == zsock) {
+                handle_zyre(fsm, guts);
+                continue;
+            }
+        }    
+    }
 }
 

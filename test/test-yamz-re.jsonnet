@@ -35,6 +35,7 @@ local passes = [
     check(re.address.abstract.singular,"yamz://*/port?a=b&c=d"),
     check(re.address.abstract.singular,"yamz://node/*?a=b&c=d"),
     check(re.address.abstract.singular,"yamz://*/*/*?a=b&c=d"),
+    check(re.address.abstract.singular,"yamz://*/*/*"),
 ];
 
 local fails = [

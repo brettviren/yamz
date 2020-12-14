@@ -21,19 +21,10 @@
 namespace yamz::server {
 
 
-    // This struct holds server logic, separate from any socketry
-    struct Logic {
+    class Logic {
 
-        zmq::context_t& ctx;
-        yamz::ServerConfig cfg;
+      public:
 
-        zmq::socket_t link, sock;
-        yamz::Zyre zyre;
-
-        // collect what we know about ourself and our clients
-        yamz::YamzPeer us;
-
- 
         // This flows down the idparms to each individual concrete
         // bind address of a peer.
         struct RemoteAddress {
@@ -42,15 +33,16 @@ namespace yamz::server {
             std::string address;
             yamz::SockType ztype;
         };
+        using server_clock = std::chrono::steady_clock;
         // map zyre uuid to information about a peer
         struct PeerInfo {
             std::string zuuid;   // zyre id
             std::string znick;   // zyre node/nick name
             std::string zaddr;   // zyre address
+            using time_point = std::chrono::time_point<server_clock>;
+            time_point seen;    // when we saw the peer ENTER or EXIT
             std::vector<RemoteAddress> ras;
         };
-        // Remember PI by zuuid so we can remove them on EXIT
-        std::map<std::string, PeerInfo> them;
 
         struct MatchAddress {
             // My client's name and its port's name for one abstract address
@@ -96,7 +88,6 @@ namespace yamz::server {
                 return &infos.at(it->second);
             }
         };
-        Clients clients;
 
         // For all peer infos that match, produce reply with client action
         void match_address(Logic::MatchAddress& ma,
@@ -116,15 +107,34 @@ namespace yamz::server {
         void del_peer(yamz::ZyreEvent& zev);
         void notify_clients();
 
-        // Internal "actions" called by actions
-        void do_matching(yamz::ClientAction ca);
-
+        // low level access
         yamz::ZyreEvent recv_zyre();
         std::string recv_link();
 
+        // Internal "actions" called by actions
+        void do_matching(yamz::ClientAction ca);
 
         // Accept a message from a client
         void accept_client(remid_t remid, const yamz::ClientConfig& cc);
+
+        // data
+
+        zmq::context_t& ctx;
+        yamz::ServerConfig cfg;
+
+        zmq::socket_t link, sock;
+        yamz::Zyre zyre;
+        bool zyre_online{false};
+
+        // collect what we know about ourself and our clients
+        yamz::YamzPeer us;
+
+        // Peers seen on ENTER, removed on EXIT.
+        std::map<std::string, PeerInfo> them;
+        // maybe: any reason to remember the goners?
+        Clients clients;
+
+        
 
     };
 

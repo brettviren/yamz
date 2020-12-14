@@ -56,7 +56,10 @@ namespace yamz {
             Return false if any expected clients have not yet made a
             request.
         */
-        bool discover();
+        bool online();
+
+        bool offline();
+
 
       private:
 
@@ -66,6 +69,8 @@ namespace yamz {
         std::thread athread;
         zmq::socket_t alink;
 
+        // Send any command and get back response.
+        std::string command(std::string cmd);
 
     };
 

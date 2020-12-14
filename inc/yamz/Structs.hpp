@@ -254,14 +254,17 @@ namespace yamz {
         ClientPorts ports = {};
     };
 
+    // @brief 
+    using ClientConfigs = std::vector<yamz::ClientConfig>;
+
     // @brief A reply sent to a client
     struct ClientReply {
 
-        // @brief Identify client port
-        Ident portid = "";
-
         // @brief What action the client should take on port
         ClientAction action = yamz::ClientAction::connect;
+
+        // @brief Identify client port
+        Ident portid = "";
 
         // @brief The addresses to act on with to the port
         ConcreteAddress address = "";
@@ -307,6 +310,16 @@ namespace yamz {
         Idents expected = {};
     };
 
+    // @brief Overall configuration object for test_yamz_cluster
+    struct TestJobCfg {
+
+        // @brief 
+        ServerConfig server = {};
+
+        // @brief 
+        ClientConfigs clients = {};
+    };
+
     // @brief Seconds since Unix epoch and nanoseconds since second
     struct UnixTime {
 
@@ -315,6 +328,23 @@ namespace yamz {
 
         // @brief 
         NanoSecs ns = 0;
+    };
+
+    // @brief Reply to a time request
+    struct TestTimeReply {
+
+        // @brief Time of reply
+        UnixTime reptime = {};
+
+        // @brief Echo back request time
+        UnixTime reqtime = {};
+    };
+
+    // @brief Make a request for a remote time
+    struct TestTimeRequest {
+
+        // @brief Time of request
+        UnixTime reqtime = {};
     };
 
     // @brief The discovered information about a peer client port
