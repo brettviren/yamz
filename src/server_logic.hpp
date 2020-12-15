@@ -20,77 +20,81 @@
 
 namespace yamz::server {
 
+    struct MatchAddress {
+        // My client's name and its port's name for one abstract address
+        std::string clid, clportid; 
+        // remember what client this came from
+        remid_t remid; 
+        // The non-query portion of the abstract address
+        std::string nodeid, clientid, portid;
+        // The query portion
+        psetmap_t patts;
+    };
+    using MatchAddresses = std::vector<MatchAddress>;
+    std::string str(const MatchAddress& ma);
+
+    // Parse an abstract address adding to the MatchAddress
+    void parse_abstract(MatchAddress& ma, const std::string& addr);
+
+
+    // This flows down the idparms to each individual concrete
+    // bind address of a peer.
+    struct RemoteAddress {
+        std::string nodeid, clientid, portid;
+        psetmap_t parms;
+        std::string address;
+        yamz::SockType ztype;
+    };
+    using server_clock = std::chrono::steady_clock;
+    // map zyre uuid to information about a peer
+    struct PeerInfo {
+        std::string zuuid;   // zyre id
+        std::string znick;   // zyre node/nick name
+        std::string zaddr;   // zyre address
+        using time_point = std::chrono::time_point<server_clock>;
+        time_point seen;    // when we saw the peer ENTER or EXIT
+        std::vector<RemoteAddress> ras;
+    };
+
+    struct Clients {
+        // map client request ID to info about the client
+        struct Info {
+            remid_t remid; // remote request id
+            std::string nick; // client name
+            // Any outstanding replies that need sending 
+            yamz::ClientReplies tosend;
+            // Any outstanding matches
+            MatchAddresses tomatch;
+        };
+        std::vector<Info> infos;
+        std::map<remid_t, size_t> remid_index;
+        std::map<std::string, size_t> nick_index;
+
+        void add(Info&& info) {
+            size_t ind = infos.size();
+            remid_index[info.remid] = ind;
+            nick_index[info.nick] = ind;
+            infos.emplace_back(info);
+        }
+
+        Info* by_remid(remid_t remid) {
+            auto it = remid_index.find(remid);
+            if (it == remid_index.end()) { return nullptr; }
+            return &infos.at(it->second);
+        }
+        Info* by_nick(const std::string& nick) {
+            auto it = nick_index.find(nick);
+            if (it == nick_index.end()) { return nullptr; }
+            return &infos.at(it->second);
+        }
+    };
 
     class Logic {
 
       public:
 
-        // This flows down the idparms to each individual concrete
-        // bind address of a peer.
-        struct RemoteAddress {
-            std::string nodeid, clientid, portid;
-            psetmap_t parms;
-            std::string address;
-            yamz::SockType ztype;
-        };
-        using server_clock = std::chrono::steady_clock;
-        // map zyre uuid to information about a peer
-        struct PeerInfo {
-            std::string zuuid;   // zyre id
-            std::string znick;   // zyre node/nick name
-            std::string zaddr;   // zyre address
-            using time_point = std::chrono::time_point<server_clock>;
-            time_point seen;    // when we saw the peer ENTER or EXIT
-            std::vector<RemoteAddress> ras;
-        };
-
-        struct MatchAddress {
-            // My client's name and its port's name for one abstract address
-            std::string clid, clportid; 
-            // remember what client this came from
-            remid_t remid; 
-            // The non-query portion of the abstract address
-            std::string nodeid, clientid, portid;
-            // The query portion
-            psetmap_t patts;
-        };
-        using MatchAddresses = std::vector<MatchAddress>;
-
-        struct Clients {
-            // map client request ID to info about the client
-            struct Info {
-                remid_t remid; // remote request id
-                std::string nick; // client name
-                // Any outstanding replies that need sending 
-                yamz::ClientReplies tosend;
-                // Any outstanding matches
-                MatchAddresses tomatch;
-            };
-            std::vector<Info> infos;
-            std::map<remid_t, size_t> remid_index;
-            std::map<std::string, size_t> nick_index;
-
-            void add(Info&& info) {
-                size_t ind = infos.size();
-                remid_index[info.remid] = ind;
-                nick_index[info.nick] = ind;
-                infos.emplace_back(info);
-            }
-
-            Info* by_remid(remid_t remid) {
-                auto it = remid_index.find(remid);
-                if (it == remid_index.end()) { return nullptr; }
-                return &infos.at(it->second);
-            }
-            Info* by_nick(const std::string& nick) {
-                auto it = nick_index.find(nick);
-                if (it == nick_index.end()) { return nullptr; }
-                return &infos.at(it->second);
-            }
-        };
-
         // For all peer infos that match, produce reply with client action
-        void match_address(Logic::MatchAddress& ma,
+        void match_address(MatchAddress& ma,
                            yamz::ClientAction ca);
 
         Logic(zmq::context_t& ctx, const yamz::ServerConfig& cfg,
@@ -103,8 +107,8 @@ namespace yamz::server {
         void go_online();
         void go_offline();
         void store_request();
-        void add_peer(yamz::ZyreEvent& zev);
-        void del_peer(yamz::ZyreEvent& zev);
+        void add_peer(const yamz::ZyreEvent& zev);
+        void del_peer(const yamz::ZyreEvent& zev);
         void notify_clients();
 
         // low level access

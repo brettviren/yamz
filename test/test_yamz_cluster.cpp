@@ -48,7 +48,7 @@ static yamz::UnixTime ut_now()
         now_s -= seconds(1);
     }
     int ns = duration_cast<duration<int,std::nano> >(now_tp - now_s).count( );
-    return yamz::UnixTime{now_s.time_since_epoch().count(), ns};
+    return yamz::UnixTime{duration_cast<seconds>(now_s.time_since_epoch()).count(), ns};
 }
 
 // return ns duration from t1 to t2
@@ -60,9 +60,11 @@ static double ut_dt(const yamz::UnixTime& t1, const yamz::UnixTime& t2)
 static void chirp(const ClientConfig& cfg, std::string msg)
 {
     auto now = ut_now();
-    std::cerr
+    std::stringstream ss;
+    ss
         << "[" << now.s << "+" << now.ns << "] " 
-        << cfg.clientid << ": " << msg << std::endl;
+        << cfg.clientid << ": " << msg;
+    std::cerr << ss.str() << std::endl;
 }
 
 static void handle_request(const ClientConfig& cfg, zmq::socket_t& sock)
@@ -111,18 +113,30 @@ static void make_request(const ClientConfig& cfg, zmq::socket_t& sock)
     yamz::TestTimeRequest ttr{ut_now()};
     yamz::data_t jobj = ttr;
     zmq::message_t msg(jobj.dump());
+
     auto res = sock.send(msg, zmq::send_flags::none);
     if (!res) {
         chirp(cfg, "failed to send request");
+        return;
     }
+    chirp(cfg, "sent request");
 }
 
 void client(zmq::context_t& ctx, ClientConfig cfg)
 {
     yamz::Client cli(ctx, cfg);
-    cli.discover();
-    auto& askme = cli.get("askme");   // server-like socket 
-    auto& askyou = cli.get("askyou"); // client-like socket 
+    auto& paskme = cli.get("askme");   // server-like port
+    auto& paskyou = cli.get("askyou"); // client-like port
+    auto& askme = paskme.sock;
+    auto& askyou = paskyou.sock;
+
+    chirp(cfg, "wait for connection");
+    while (paskyou.conns.empty()) {
+        cli.discover();
+        std::this_thread::sleep_for(std::chrono::milliseconds{1000});
+    }
+
+    askyou.set(zmq::sockopt::sndtimeo, 0);
 
     zmq::poller_t<> poller;
     poller.add(askme, zmq::event_flags::pollin);
@@ -130,17 +144,22 @@ void client(zmq::context_t& ctx, ClientConfig cfg)
     std::vector<zmq::poller_event<>> events(2);
     std::chrono::milliseconds timeout{1000};
     while (true) {              // fixme: make way to break
+        chirp(cfg, "poll on sockets");
         const int nevents = poller.wait_all(events, timeout);
         if (!nevents) {
+            chirp(cfg, "timeout, make request");
             make_request(cfg, askyou);
+            continue;
         }
         for (int iev = 0; iev < nevents; ++iev) {
 
             if (events[iev].socket == askme) { // get request
+                chirp(cfg, "got request");
                 handle_request(cfg, askme);
             }
 
             if (events[iev].socket == askyou) { // get reply
+                chirp(cfg, "got reply");
                 handle_reply(cfg, askyou);
             }
         }
@@ -158,15 +177,19 @@ int main(int argc, char* argv[])
     yamz::data_t jcfg;
     std::ifstream istr(argv[1]);
     istr >> jcfg;
+    auto cfg = jcfg.get<yamz::TestJobCfg>();
 
     zmq::context_t ctx;
 
-    yamz::Server server(ctx, jcfg["server"].get<yamz::ServerConfig>());
+    yamz::Server server(ctx, cfg.server);
+    server.start();
+
     std::vector<std::thread> cthreads;
-    for (auto jccfg : jcfg["clients"]) {
-        cthreads.emplace_back([&](yamz::ClientConfig cc) {
+    for (auto& cc : cfg.clients) {
+        chirp(cc, "start client thread");
+        cthreads.emplace_back([&ctx, cc]() {
             client(ctx, cc);
-        }, jccfg.get<yamz::ClientConfig>());
+        });
     }
     
     for (auto& cli : cthreads) {

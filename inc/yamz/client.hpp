@@ -53,7 +53,16 @@ namespace yamz {
                       timeout=std::chrono::milliseconds(0));
 
 
-        /** Return reference to socket associated with named port
+        struct PortInfo {
+            // The portid 
+            std::string name;
+            // The socket object
+            zmq::socket_t sock;
+            // remember concrete addresses of binds and connects
+            std::vector<std::string> binds, conns;
+        };
+
+        /** Return named port
          *
          *  Throws client_errror if port does not exist.
          *
@@ -61,20 +70,18 @@ namespace yamz {
          *  must be called in the same thread as which called
          *  discover().
          */
-        zmq::socket_t& get(std::string port);
+        PortInfo& get(std::string port);
 
     private:
         zmq::context_t& ctx;
         ClientConfig cfg;
 
         zmq::socket_t clisock;
-        std::map<std::string, zmq::socket_t> socks;
+        std::map<std::string, PortInfo> ports;
 
         // Break up client-side steps of yamz c/s protocol 
         void connect_server();
-        // -->sets clisock
-        void make_socks();
-        // -->sets socks.size() != 0
+        void make_ports();
         void do_binds();
         bool bound{false};
         void make_request();

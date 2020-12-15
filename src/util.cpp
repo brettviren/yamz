@@ -95,4 +95,3 @@ bool yamz::match(const psetmap_t& patts, const psetmap_t& parms)
     // survived, exhausted, but true
     return true;
 }
-

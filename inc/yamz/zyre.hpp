@@ -29,12 +29,14 @@ namespace yamz {
         ZyreEvent(const ZyreEvent&) = delete;
         ZyreEvent operator=(const ZyreEvent&) = delete;
 
-        ZyreEvent(ZyreEvent&& rhs) {
+        ZyreEvent(ZyreEvent&& rhs)
+        {
             evt = rhs.evt;
             rhs.evt = nullptr;
         }
 
-        ZyreEvent& operator=(ZyreEvent&& rhs) {
+        ZyreEvent& operator=(ZyreEvent&& rhs)
+        {
             if (&rhs != this) {
                 evt = rhs.evt;
                 rhs.evt = nullptr;
@@ -42,27 +44,29 @@ namespace yamz {
             return *this;
         }
 
-        std::string type() {
+        std::string type() const
+        {
             const char *s = zyre_event_type(evt);
             if (s) { return s; }
             return "";
         }
 
-        std::string peer_name()
+        std::string peer_name() const
         {
             const char *s = zyre_event_peer_name(evt);
             if (s) { return s; }
             return "";
         }
 
-        std::string peer_uuid()
+        std::string peer_uuid() const
         {
             const char *s = zyre_event_peer_uuid(evt);
             if (s) { return s; }
             return "";
         }
 
-        std::string peer_addr() {
+        std::string peer_addr() const
+        {
             const char *s = zyre_event_peer_addr(evt);
             if (s) { return s; }
             return "";
@@ -75,15 +79,15 @@ namespace yamz {
             return "";
         }
 
-        std::string header(const std::string& key, const std::string& def="") {
+        std::string header(const std::string& key, const std::string& def="") const
+        {
             const char *s = zyre_event_header(evt, key.c_str());
             if (s) { return s; }
             return def;
         }
     };
 
-    // A memoizing wrapper around the underlying Zyre.  Going offline
-    // will remember the node name, port and headers.
+    // Simple C++ wrapper to Zyre.
     class Zyre {
         zyre_t* _peer{nullptr};
         std::string _nick{""};
@@ -94,6 +98,10 @@ namespace yamz {
       public:
 
         Zyre(std::string nodename = "") : _nick(nodename) {
+            _peer = zyre_new(_nick.empty() ? nullptr : _nick.c_str());
+            if (!_peer) {
+                throw zyre_error("failed to create zyre");
+            }
         }
 
         Zyre(const Zyre&) = delete;
@@ -101,17 +109,15 @@ namespace yamz {
 
         ~Zyre() {
             offline();
+            zyre_destroy(&_peer);
         }
 
         // Configure zyre.  If online, this requires a reboot().
         void set_header(std::string key, std::string val) {
-            _headers[key] = val;
-        }
-        void clear_headers() {
-            _headers.clear();
+            zyre_set_header(_peer, key.c_str(), "%s", val.c_str());
         }
         void set_portnum(int portnum = 5670) {
-            _portnum = portnum;
+            zyre_set_port(_peer, _portnum);
         }
 
         // Get underlying zyre socket if online
@@ -122,28 +128,11 @@ namespace yamz {
             return zmq::socket_ref(zmq::from_handle, low);
         }
 
-        void reboot() {
-            offline();
-            online();
-        }
-
         void offline() {
-            if (!_peer) { return; }
-            zyre_destroy(&_peer);
+            zyre_stop(_peer);
         }
 
         void online() {
-            if (_peer) { return; }
-
-            _peer = zyre_new(_nick.empty() ? nullptr : _nick.c_str());
-            if (!_peer) {
-                throw zyre_error("failed to create zyre");
-            }
-
-            for (const auto& [key, val] : _headers) {
-                zyre_set_header(_peer, key.c_str(), "%s", val.c_str());
-            }
-            zyre_set_port(_peer, _portnum);
             int rc = zyre_start(_peer);
             if (rc) {
                 throw zyre_error("failed to start zyre");

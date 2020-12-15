@@ -20,10 +20,10 @@ namespace yamz::server {
      */
     struct ActorArgs {
         zmq::context_t& ctx;
-        const yamz::ServerConfig& cfg;
-        const std::string& linkname;
+        yamz::ServerConfig cfg;
+        std::string linkname;
     };
-    void actor(ActorArgs& aa);
+    void actor(ActorArgs aa);
 
 }
 

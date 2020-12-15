@@ -18,21 +18,26 @@ SEQ append(const SEQ& seq1, const SEQ& seq2)
     return ret;    
 }
 
+std::string yamz::server::str(const MatchAddress& ma)
+{
+    std::stringstream ss;
+    ss << "<MatchAddress "
+       << ma.nodeid << "/"
+       << ma.clientid << "/"
+       << ma.portid
+       << ">";
+    return ss.str();
+}
 // parse an abstract address into a MatchAddress
-static void
-parse_abstract(Logic::MatchAddress& ma,
-                             const std::string& addr)
+void yamz::server::parse_abstract(MatchAddress& ma, const std::string& addr)
 {
     auto uri = yamz::uri::parse(addr);
 
-    // path = "//client/port?foo=bar"
-    auto s1 = uri.path.find_first_not_of("/");
-    ++s1;
-    auto s2 = uri.path.find_first_not_of("/", s1);
-    ma.clientid = uri.path.substr(s1, s2-s1);
-    ++s2;
-    auto s3 = uri.path.find_first_not_of("/?", s2);
-    ma.portid = uri.path.substr(s2, s3-s2);
+    ma.nodeid = uri.domain;
+
+    auto pl = yamz::parse_list(uri.path, "/");
+    ma.clientid = pl[1];
+    ma.portid = pl[2];
 
     for (const auto& [key,val] : uri.queries) {
         ma.patts[key].insert(val);
@@ -71,6 +76,8 @@ yamz::server::Logic::Logic(zmq::context_t& ctx, const yamz::ServerConfig& cfg,
 void yamz::server::Logic::accept_client(remid_t remid,
                                         const yamz::ClientConfig& cc)
 {
+    std::cerr << "server actor: accept client: " << cc.clientid << std::endl;
+
     // For talking back to client
     Clients::Info ci{remid, cc.clientid};
 
@@ -97,6 +104,9 @@ void yamz::server::Logic::accept_client(remid_t remid,
                 }
                 // and finally any info in the abstract address itself
                 parse_abstract(ma, addr);
+                std::cerr << "yamz srever: tomatch for " << cc.clientid
+                          << " ? " << str(ma) << std::endl;
+
                 ci.tomatch.push_back(ma);
             }
             else { 
@@ -114,7 +124,7 @@ void yamz::server::Logic::accept_client(remid_t remid,
     clients.add(std::move(ci));
 }
 
-void Logic::match_address(Logic::MatchAddress& ma, yamz::ClientAction ca)
+void Logic::match_address(MatchAddress& ma, yamz::ClientAction ca)
 {
     auto* ci = clients.by_remid(ma.remid);
     if (!ci) {
@@ -122,6 +132,8 @@ void Logic::match_address(Logic::MatchAddress& ma, yamz::ClientAction ca)
     }
     for (const auto& it : them) {
         for (const auto& ra : it.second.ras) {
+            std::cerr << "yamz server: try match for " << ma.clid
+                      << " = " << ma.nodeid << "/" << ma.clientid << "/" << ma.portid << " = " << ra.address << std::endl;
             if (! (ma.nodeid == "*" or ma.nodeid == ra.nodeid)) {
                 break;
             }
@@ -170,23 +182,31 @@ void yamz::server::Logic::notify_clients()
         ci.tosend.clear();
     }
 }
+
 void yamz::server::Logic::go_online() 
 {
     if (zyre_online) { return; }
     bool gotem = have_clients();
+    yamz::data_t jobj = us;
+    zyre.set_header("YAMZ", jobj.dump()); 
     zyre.online();
-    // maybe: inform clients
+    zyre_online = true;
+    std::cerr << "yamz server: go online with:\n" << jobj.dump() << std::endl;
     std::string rep = gotem ? "OKAY" : "FAIL";
     zmq::message_t msg{rep};
     auto res = link.send(msg, zmq::send_flags::none);
     if (!res) {
         throw server_error("failed to send command online ack to API");
     }
+
+    // maybe: inform clients
 }
+
 void yamz::server::Logic::go_offline() 
 {
     if (!zyre_online) { return; }
     zyre.offline();
+    zyre_online = false;
     // maybe: inform clients?
     std::string rep = "OKAY";
     zmq::message_t msg(rep);
@@ -195,6 +215,7 @@ void yamz::server::Logic::go_offline()
         throw server_error("failed to send command offline ack to API");
     }
 }
+
 void yamz::server::Logic::store_request() 
 {
     // We have a client request waiting.  Receive it and store.
@@ -206,18 +227,21 @@ void yamz::server::Logic::store_request()
     do_matching(yamz::ClientAction::connect);
 }
 
-void yamz::server::Logic::add_peer(yamz::ZyreEvent& zev) 
+void yamz::server::Logic::add_peer(const yamz::ZyreEvent& zev) 
 {
+    
     auto znick = zev.peer_name();
     auto zuuid = zev.peer_uuid();
     auto zaddr = zev.peer_addr();
+
+    std::cerr << "yamz server: add peer: " << znick << std::endl;
 
     auto text = zev.header("YAMZ");
     auto jobj = yamz::data_t::parse(text);
 
     auto yp = jobj.get<yamz::YamzPeer>();
 
-    Logic::PeerInfo pi{zuuid, znick, zaddr, server_clock::now()};
+    PeerInfo pi{zuuid, znick, zaddr, server_clock::now()};
 
     for (const auto& client : yp.clients) {
         auto client_parms = append(yp.idparms, client.idparms);
@@ -233,6 +257,10 @@ void yamz::server::Logic::add_peer(yamz::ZyreEvent& zev)
                 RemoteAddress ra{znick, client.clientid, port.portid,
                     addr_parms, just_addr, port.ztype};
                 pi.ras.emplace_back(std::move(ra));
+                std::cerr << "yamz server: add peer: "
+                          << client.clientid << "/"
+                          << port.portid << " = " << just_addr
+                          << std::endl;
             }
         }
     }
@@ -240,7 +268,7 @@ void yamz::server::Logic::add_peer(yamz::ZyreEvent& zev)
 
     do_matching(yamz::ClientAction::connect);
 }
-void yamz::server::Logic::del_peer(yamz::ZyreEvent& zev) 
+void yamz::server::Logic::del_peer(const yamz::ZyreEvent& zev) 
 {
     auto ruuid = zev.peer_uuid();
     auto it = them.find(ruuid);
@@ -255,14 +283,17 @@ void yamz::server::Logic::del_peer(yamz::ZyreEvent& zev)
 bool yamz::server::Logic::have_clients()
 {
     if (cfg.expected.empty()) {
+        std::cerr << "yamz server: no clients expected" << std::endl;
         // no expectation, yeah, sure, I have all I want, whatever
         return true;
     }
     for (const auto& nick : cfg.expected) {
         if (! clients.by_nick(nick)) {
+            std::cerr << "yamz server: expect client " << nick << std::endl;
             return false;
         }
     }
+    std::cerr << "yamz server: have expected clients: " << cfg.expected.size() << std::endl;
     return true;
 }
 

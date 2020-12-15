@@ -24,10 +24,12 @@ void yamz::Server::start()
     alink.bind(linkname);
 
     yamz::server::ActorArgs aa {ctx, cfg, linkname};
-    athread = std::thread([&](){
-        yamz::server::actor(aa);
-    });
+    // athread = std::thread([aa](){
+    //     yamz::server::actor(aa);
+    // });
+    athread = std::thread(yamz::server::actor,aa);
 
+    
     // CZMQ compatible convention, wait for actor to signal ready
     zmq::message_t msg;
     auto res = alink.recv(msg);
