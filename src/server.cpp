@@ -67,6 +67,8 @@ std::string yamz::Server::command(std::string cmd)
 
 yamz::Server::~Server()
 {
+    std::cerr << "server: destructing" << std::endl;
+
     // We follow CZMQ convention to send a strangely spelled message
     // to tell actor to cease operation and exit cleanly.
     auto sres = alink.send(zmq::message_t("$TERM", 5),

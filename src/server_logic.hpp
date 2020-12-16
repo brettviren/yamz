@@ -106,6 +106,7 @@ namespace yamz::server {
         // Actions
         void go_online();
         void go_offline();
+        void do_terminate();
         void store_request();
         void add_peer(const yamz::ZyreEvent& zev);
         void del_peer(const yamz::ZyreEvent& zev);

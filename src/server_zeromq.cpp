@@ -5,23 +5,6 @@
 
 using namespace yamz::server;
 
-
-remid_t yamz::server::recv(zmq::socket_t& sock, yamz::ClientConfig& cc)
-{
-    zmq::message_t msg;
-    auto res = sock.recv(msg);
-    if (!res) {
-        throw yamz::server_error("failed to receive from client");
-    }
-
-    // note, this is for SERVER, if ROUTER, we take from message.
-    remid_t rid = msg.routing_id();
-
-    auto sreq = msg.to_string();
-    auto jobj = yamz::data_t::parse(sreq);
-    cc = jobj.get<yamz::ClientConfig>();
-    return rid;
-}
 void send(zmq::socket_t& sock, remid_t rid, const yamz::ClientConfig& cc)
 {
     yamz::data_t jobj = cc;

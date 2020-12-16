@@ -68,6 +68,8 @@ yamz::server::Logic::Logic(zmq::context_t& ctx, const yamz::ServerConfig& cfg,
 
     // Link to zyre, but we don't start yet
     zyre.set_portnum(cfg.portnum);
+    // fixme: make configurable
+    zyre.set_verbose();
 
     // notify API it can continue
     std::cerr << "server actor: sending ready" << std::endl;
@@ -217,6 +219,27 @@ void yamz::server::Logic::go_offline()
     }
 }
 
+void yamz::server::Logic::do_terminate() 
+{
+    go_offline();
+    chirp(cfg, "termiating");
+
+    yamz::ClientReply rep{yamz::ClientAction::terminate};
+    yamz::data_t jobj = rep;
+    std::string sdat = jobj.dump();
+    
+    for (auto& ci : clients.infos) {
+        chirp(cfg, "termiating client: " << ci.nick);
+        zmq::message_t msg(sdat);
+        msg.set_routing_id(ci.remid);
+        auto res = sock.send(msg, zmq::send_flags::none);
+        if (!res) {
+            chirp(cfg, "failed to send terminate to " << ci.nick);
+        }
+    }
+    
+}
+
 void yamz::server::Logic::store_request() 
 {
     // We have a client request waiting.  Receive it and store.
@@ -298,7 +321,8 @@ bool yamz::server::Logic::have_clients()
 
 yamz::ZyreEvent yamz::server::Logic::recv_zyre()
 {
-    return zyre.event();
+    auto zev = zyre.event();
+    return zev;
 }
 std::string yamz::server::Logic::recv_link()
 {

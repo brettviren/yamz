@@ -25,9 +25,6 @@ namespace yamz::server {
         return rid;
     }
 
-    // Recieve from socket, filling cc, return remid
-    remid_t recv(zmq::socket_t& sock, yamz::ClientConfig& cc);
-
     // Send to socket
     void send(zmq::socket_t& sock, remid_t rid, const yamz::ClientConfig& cc);
 

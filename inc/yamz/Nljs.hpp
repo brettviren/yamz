@@ -29,6 +29,8 @@ namespace yamz {
     NLOHMANN_JSON_SERIALIZE_ENUM( ClientAction, {
             { yamz::ClientAction::connect, "connect" },
             { yamz::ClientAction::disconnect, "disconnect" },
+            { yamz::ClientAction::terminate, "terminate" },
+            { yamz::ClientAction::timeout, "timeout" },
         })
     NLOHMANN_JSON_SERIALIZE_ENUM( SockType, {
             { yamz::SockType::PAIR, "PAIR" },

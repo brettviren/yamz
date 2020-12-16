@@ -40,31 +40,35 @@ namespace {
 
     // forward actions to server::Logic
     const auto go_online = [](yamz::server::Logic& guts) {
-        chirp("server actor: go online");
+        chirp("fsm: go online");
         guts.go_online();
     };
     const auto go_offline = [](yamz::server::Logic& guts) {
-        chirp("server actor: go offline");
+        chirp("fsm: go offline");
         guts.go_offline();
     };
+    const auto do_terminate = [](yamz::server::Logic& guts) {
+        chirp("fsm: terminating");
+        guts.do_terminate();
+    };
     const auto store_request = [](yamz::server::Logic& guts) {
-        chirp("server actor: store request");
+        chirp("fsm: store request");
         guts.store_request();
     };
     const auto add_peer = [](yamz::server::Logic& guts, const PeerEnter& pe) {
-        chirp("server actor: add peer");
+        chirp("fsm: add peer");
         guts.add_peer(pe.zev);
     };
     const auto del_peer = [](yamz::server::Logic& guts, const PeerExit& pe) {
-        chirp("server actor: del peer");
+        chirp("fsm: del peer");
         guts.del_peer(pe.zev);
     };
     const auto notify_clients = [](yamz::server::Logic& guts) {
-        chirp("server actor: notify clients");
+        chirp("fsm: notify clients");
         guts.notify_clients();
     };
     const auto say_hi = [](yamz::server::Logic& guts) {
-        chirp("server actor: hi there");
+        chirp("fsm: hi there");
     };
 
     // forward guards to server::Logic 
@@ -109,6 +113,8 @@ namespace {
 // clang-format: off
 * state<Collecting> + event<ServerOnline> / go_online = state<Discovery>
 , state<Discovery> + event<ServerOffline> / go_offline = state<Collecting>
+, state<Collecting> + event<ServerTerminate> / do_terminate = X
+, state<Discovery> + event<ServerTerminate> / do_terminate = X
 // clang-format: on
                 );
         }
@@ -147,6 +153,9 @@ handle_zyre(FSM& fsm, yamz::server::Logic& guts)
 {
     auto zev = guts.recv_zyre();
 
+    chirp("zyre " << zev.type() << ": peer: "
+          << zev.peer_name() << " uuid:[" << zev.peer_uuid() << "]");
+
     if (zev.type() == "ENTER") {
         chirp("zyre ENTER: peer: "
               << zev.peer_name() << " uuid:[" << zev.peer_uuid() << "]");
@@ -181,10 +190,35 @@ void yamz::server::actor(ActorArgs aa)
     poller.add(zsock, zmq::event_flags::pollin);
     std::vector<zmq::poller_event<>> events(3);
 
+    // Tell API it may continue.
+    guts.link.send(zmq::message_t{}, zmq::send_flags::none);
+
     chirp("entering main loop");
-    while (true) {              // fixme: make way to break
+    while (! fsm.is(sml::X)) {
+
+        bool bail = false;
         //chirp("polling");
-        const int nevents = poller.wait_all(events, std::chrono::milliseconds{-1});
+        int nevents = 0;
+        try {
+            nevents = poller.wait_all(events, std::chrono::milliseconds{-1});
+        }
+        catch (zmq::error_t& e) {
+            chirp("error while polling: " << e.what());
+            bail = true;
+        }
+        if (zsys_interrupted) {
+            chirp("czmq interupted");
+            bail = true;
+        }
+        if (!nevents) {
+            chirp("main poll interupted");
+            bail = true;
+        }
+        if (bail) {
+            fsm.process_event(ServerTerminate{});
+            assert(fsm.is(sml::X));
+            break;
+        }
         for (int iev = 0; iev < nevents; ++iev) {
             if (events[iev].socket == guts.link) {
                 handle_link(fsm, guts);
@@ -203,5 +237,7 @@ void yamz::server::actor(ActorArgs aa)
             }
         }    
     }
+    chirp("exiting");
+    guts.link.send(zmq::message_t{}, zmq::send_flags::none);
 }
 

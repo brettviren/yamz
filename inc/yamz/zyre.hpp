@@ -8,6 +8,7 @@
 
 #include "yamz/zeromq.hpp"
 #include "zyre.h"
+#include "czmq.h"               // for zsys_interrupted
 #include <exception>
 #include <map>
 
@@ -112,6 +113,8 @@ namespace yamz {
             zyre_destroy(&_peer);
         }
 
+        void set_verbose() { zyre_set_verbose(_peer); }
+
         // Configure zyre.  If online, this requires a reboot().
         void set_header(std::string key, std::string val) {
             zyre_set_header(_peer, key.c_str(), "%s", val.c_str());
@@ -140,10 +143,14 @@ namespace yamz {
         }
 
         ZyreEvent event() {
-            if (_peer) {
-                return ZyreEvent(zyre_event_new(_peer));
+            if (!_peer) {
+                throw zyre_error("can not get blood from a stone");
             }
-            throw zyre_error("can not get blood from a stone");
+            zyre_event_t* evt = zyre_event_new(_peer);
+            if (!evt) {
+                throw zyre_error("failed to get zyre event");
+            }
+            return ZyreEvent(evt);
         }        
 
     };

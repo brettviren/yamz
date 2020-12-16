@@ -132,13 +132,16 @@ local yamz = {
 
     // The server actor has an asynchronous protocol with clients.
     // maybe:  add "online" and "offline"
-    cliact: s.enum("ClientAction", symbols=["connect", "disconnect"]),
+    cliact: s.enum("ClientAction", symbols=[
+        "connect", "disconnect", "terminate","timeout"]),
     clirpl: s.record("ClientReply", [
         s.field("action", self.cliact,
                 doc="What action the client should take on port"),
         s.field("portid", self.ident,
+                default="",
                 doc="Identify client port"),
         s.field("address", self.concaddr,
+                default="",
                 doc="The addresses to act on with to the port"),
     ], doc="A reply sent to a client"),
     clirpls: s.sequence("ClientReplies", self.clirpl),

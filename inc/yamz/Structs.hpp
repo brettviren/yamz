@@ -72,18 +72,24 @@ namespace yamz {
     enum class ClientAction: unsigned {
         connect,
         disconnect,
+        terminate,
+        timeout,
     };
     // return a string representation of a ClientAction.
     inline
     const char* str(ClientAction val) {
         if (val == ClientAction::connect) { return "connect" ;}
         if (val == ClientAction::disconnect) { return "disconnect" ;}
+        if (val == ClientAction::terminate) { return "terminate" ;}
+        if (val == ClientAction::timeout) { return "timeout" ;}
         return "";                  // should not reach
     }
     inline
     ClientAction parse_ClientAction(std::string val, ClientAction def = ClientAction::connect) {
         if (val == "connect") { return ClientAction::connect; }
         if (val == "disconnect") { return ClientAction::disconnect; }
+        if (val == "terminate") { return ClientAction::terminate; }
+        if (val == "timeout") { return ClientAction::timeout; }
         return def;
     }
 

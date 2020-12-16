@@ -40,17 +40,23 @@ namespace yamz {
 
         /** Check for any replies from server.
          *  
-         *  Return true if a the server responded before the timeout.
          *  A negative timeout will block forever.
+         *
+         *  Return the client action as given by the server.  If
+         *  ClientAction::terminate is returned, app should exit the
+         *  thread using this client.
          *
          *  This method must be called periodically in order to
          *  discover any newly arrived peers.
          *
          *  For general thread-safe use of the sockets, this method
          *  must be called in the same thread as may later call get().
+         *
+         *  throws client_error.
          */
-        bool discover(std::chrono::milliseconds
-                      timeout=std::chrono::milliseconds(0));
+        yamz::ClientAction
+        discover(std::chrono::milliseconds
+                 timeout=std::chrono::milliseconds(0));
 
 
         struct PortInfo {

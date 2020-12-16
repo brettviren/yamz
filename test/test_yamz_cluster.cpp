@@ -54,18 +54,10 @@ static yamz::UnixTime ut_now()
 // return ns duration from t1 to t2
 static double ut_dt(const yamz::UnixTime& t1, const yamz::UnixTime& t2)
 {
-    return 1e9 * (t2.s - t1.s) + (t2.s - t1.s);
+    return 1e9 * (t2.s - t1.s) + (t2.ns - t1.ns);
 }
 
-static void chirp(const ClientConfig& cfg, std::string msg)
-{
-    auto now = ut_now();
-    std::stringstream ss;
-    ss
-        << "[" << now.s << "+" << now.ns << "] " 
-        << cfg.clientid << ": " << msg;
-    std::cerr << ss.str() << std::endl;
-}
+#define chirp(cfg, strm) { std::stringstream ss; ss << "test_yamz_cluster: " << cfg.clientid << ": " << strm << "\n"; std::cerr << ss.str(); }
 
 static void handle_request(const ClientConfig& cfg, zmq::socket_t& sock)
 {
@@ -101,9 +93,7 @@ static void handle_reply(const ClientConfig& cfg, zmq::socket_t& sock)
     auto ttrep = jobj.get<yamz::TestTimeReply>();
     double dt1 = ut_dt(ttrep.reqtime, ttrep.reptime);
     double dt2 = ut_dt(ttrep.reptime, ut_now());
-    std::stringstream ss;
-    ss << "dt1: " << dt1 << " dt2: " << dt2;
-    chirp(cfg, ss.str());
+    chirp(cfg, "dt1: " << dt1 << " dt2: " << dt2);
 }
 
 // Ask the world for a time.  The client-like socket likely implements
@@ -119,7 +109,7 @@ static void make_request(const ClientConfig& cfg, zmq::socket_t& sock)
         chirp(cfg, "failed to send request");
         return;
     }
-    chirp(cfg, "sent request");
+    // chirp(cfg, "sent request");
 }
 
 // this thread function uses one yamz::Client.  It represents what
@@ -136,8 +126,16 @@ void cluster_component(zmq::context_t& ctx, ClientConfig cfg)
 
     while (paskyou.conns.empty()) {
         chirp(cfg, "wait for at least one connection");
-        cli.discover();
-        std::this_thread::sleep_for(std::chrono::milliseconds{1000});
+        auto what = cli.discover();
+        if (what == yamz::ClientAction::timeout) {
+            std::this_thread::sleep_for(std::chrono::milliseconds{1000});
+            continue;
+        }
+        if (what == yamz::ClientAction::terminate) {
+            chirp(cfg, "terminate");
+            return;
+        }
+        break;
     }
 
     askyou.set(zmq::sockopt::sndtimeo, 0);
@@ -146,10 +144,24 @@ void cluster_component(zmq::context_t& ctx, ClientConfig cfg)
     poller.add(askme, zmq::event_flags::pollin);
     poller.add(askyou, zmq::event_flags::pollin);
     std::vector<zmq::poller_event<>> events(2);
-    std::chrono::milliseconds timeout{1000};
+    std::chrono::milliseconds timeout{10000};
     while (true) {              // fixme: make way to break
-        chirp(cfg, "poll on sockets");
-        const int nevents = poller.wait_all(events, timeout);
+        auto what = cli.discover();
+        if (what == yamz::ClientAction::terminate) {
+            chirp(cfg, "terminate");
+            break;
+        }
+
+
+        //chirp(cfg, "poll on sockets");
+        int nevents = 0;
+        try {
+            nevents = poller.wait_all(events, timeout);
+        }
+        catch (zmq::error_t& e) {
+            chirp(cfg, "poll failure: " << e.what());
+            break;
+        }
         if (!nevents) {
             chirp(cfg, "timeout, make request");
             make_request(cfg, askyou);
@@ -158,18 +170,18 @@ void cluster_component(zmq::context_t& ctx, ClientConfig cfg)
         for (int iev = 0; iev < nevents; ++iev) {
 
             if (events[iev].socket == askme) { // get request
-                chirp(cfg, "got request");
+                //chirp(cfg, "got request");
                 handle_request(cfg, askme);
             }
 
             if (events[iev].socket == askyou) { // get reply
-                chirp(cfg, "got reply");
+                //chirp(cfg, "got reply");
                 handle_reply(cfg, askyou);
             }
         }
         // fixme: add making a request
     }
-    
+    chirp(cfg, "exiting");
 }
 
 int main(int argc, char* argv[])
@@ -196,9 +208,23 @@ int main(int argc, char* argv[])
         });
     }
     
-    for (auto& cli : cthreads) {
-        cli.join();
+    while (true) {
+        size_t ncanjoin = 0;
+        for (auto& cli : cthreads) {
+            if (cli.joinable()) ++ncanjoin;
+        }
+        if (ncanjoin == cthreads.size()) {
+            std::cerr << "joining threads\n";
+            for (auto& cli : cthreads) {
+                cli.join();
+            }
+            break;
+        }
+        std::cerr << "joinable threads: "
+                  << ncanjoin << "/" << cthreads.size() << "\n";
+        std::this_thread::sleep_for(std::chrono::milliseconds{1000});
     }
+    std::cerr << "main exit \n";
 
     return 0;
 }

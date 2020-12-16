@@ -15,6 +15,7 @@ yamz::Client::Client(zmq::context_t& ctx, const yamz::ClientConfig& newcfg)
 }
 yamz::Client::~Client()
 {
+    std::cerr << "client: destructing" << std::endl;
 }
 
 #define chirp(cfg, strm) { std::stringstream ss; ss << "yamz::client: " << cfg.clientid << ": " << strm << "\n"; std::cerr << ss.str(); }
@@ -109,15 +110,29 @@ void yamz::Client::make_request()
     requested = true;
 }
 
-bool yamz::Client::discover(std::chrono::milliseconds timeout)
+yamz::ClientAction yamz::Client::discover(std::chrono::milliseconds timeout)
 {
-    int timeo = static_cast<int>(timeout.count());
-    clisock.set(zmq::sockopt::rcvtimeo, timeo);
+    // int timeo = static_cast<int>(timeout.count());
+    // clisock.set(zmq::sockopt::rcvtimeo, timeo);
     zmq::message_t msg;
 
+    zmq::poller_t<> poller;
+    poller.add(clisock, zmq::event_flags::pollin);
+    std::vector<zmq::poller_event<>> events(1);
+
+    //chirp("polling");
+    const int nevents = poller.wait_all(events, timeout);
+    if (zsys_interrupted) {
+        chirp(cfg, "czmq interupted");
+        return yamz::ClientAction::terminate;
+    }
+    if (!nevents) {
+        return yamz::ClientAction::timeout;
+    }
     auto res = clisock.recv(msg, zmq::recv_flags::none);
     if (!res) {
-        return false;           // timeout
+        chirp(cfg, "error in receiving");
+        throw client_error("error receiving reply");
     }
     auto jobj = yamz::data_t::parse(msg.to_string());
     auto rep = jobj.get<yamz::ClientReply>();
@@ -133,13 +148,17 @@ bool yamz::Client::discover(std::chrono::milliseconds timeout)
         pi.sock.connect(rep.address);
         pi.conns.push_back(rep.address);
         chirp(cfg, "connected to: " << rep.address);
-        return true;
+        return rep.action;
     }
     if (rep.action == yamz::ClientAction::disconnect) {
         pi.sock.disconnect(rep.address);
         // fixme: remove from conns
         chirp(cfg, "disconnected from: " << rep.address);
-        return true;
+        return rep.action;
+    }
+    if (rep.action == yamz::ClientAction::terminate) {
+        chirp(cfg, "server says terminate: ");
+        return rep.action;
     }
     throw yamz::client_error("yamz server gave unknown reply");
 }
