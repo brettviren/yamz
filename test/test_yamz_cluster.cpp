@@ -122,7 +122,10 @@ static void make_request(const ClientConfig& cfg, zmq::socket_t& sock)
     chirp(cfg, "sent request");
 }
 
-void client(zmq::context_t& ctx, ClientConfig cfg)
+// this thread function uses one yamz::Client.  It represents what
+// might be a "component" or a "module" in some toolkits or
+// frameworks.
+void cluster_component(zmq::context_t& ctx, ClientConfig cfg)
 {
     yamz::Client cli(ctx, cfg);
     auto& paskme = cli.get("askme");   // server-like port
@@ -130,8 +133,9 @@ void client(zmq::context_t& ctx, ClientConfig cfg)
     auto& askme = paskme.sock;
     auto& askyou = paskyou.sock;
 
-    chirp(cfg, "wait for connection");
+
     while (paskyou.conns.empty()) {
+        chirp(cfg, "wait for at least one connection");
         cli.discover();
         std::this_thread::sleep_for(std::chrono::milliseconds{1000});
     }
@@ -188,7 +192,7 @@ int main(int argc, char* argv[])
     for (auto& cc : cfg.clients) {
         chirp(cc, "start client thread");
         cthreads.emplace_back([&ctx, cc]() {
-            client(ctx, cc);
+            cluster_component(ctx, cc);
         });
     }
     

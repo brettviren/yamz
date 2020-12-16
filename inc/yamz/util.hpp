@@ -44,6 +44,12 @@ namespace yamz {
     // Return true if the address is abstract
     bool is_abstract(const std::string& addr);
 
+
+    // Divine "the" IP address that peers would likly see the host.
+    // This uses the "UDP trick".  It may return the "wrong" answer on
+    // hosts with multiple gateways.
+    std::string myip();
+
 }
 
 

@@ -18,6 +18,8 @@ SEQ append(const SEQ& seq1, const SEQ& seq2)
     return ret;    
 }
 
+#define chirp(cfg, strm) { std::stringstream ss; ss << "yamz::server::logic: " << cfg.nodeid << ": " << strm << "\n"; std::cerr << ss.str(); }
+
 std::string yamz::server::str(const MatchAddress& ma)
 {
     std::stringstream ss;
@@ -60,7 +62,7 @@ yamz::server::Logic::Logic(zmq::context_t& ctx, const yamz::ServerConfig& cfg,
     // Server socket
     sock = zmq::socket_t(ctx, zmq::socket_type::server);
     for (auto& addr : cfg.addresses) {
-        std::cerr << "server actor: bind: " << addr << std::endl;
+        chirp(cfg, "bind: " << addr);
         sock.bind(addr);
     }    
 
@@ -76,7 +78,7 @@ yamz::server::Logic::Logic(zmq::context_t& ctx, const yamz::ServerConfig& cfg,
 void yamz::server::Logic::accept_client(remid_t remid,
                                         const yamz::ClientConfig& cc)
 {
-    std::cerr << "server actor: accept client: " << cc.clientid << std::endl;
+    chirp(cfg, "accept client: " << cc.clientid);
 
     // For talking back to client
     Clients::Info ci{remid, cc.clientid};
@@ -104,8 +106,7 @@ void yamz::server::Logic::accept_client(remid_t remid,
                 }
                 // and finally any info in the abstract address itself
                 parse_abstract(ma, addr);
-                std::cerr << "yamz srever: tomatch for " << cc.clientid
-                          << " ? " << str(ma) << std::endl;
+                chirp(cfg, "tomatch for " << cc.clientid << " ? " << str(ma));
 
                 ci.tomatch.push_back(ma);
             }
@@ -132,8 +133,7 @@ void Logic::match_address(MatchAddress& ma, yamz::ClientAction ca)
     }
     for (const auto& it : them) {
         for (const auto& ra : it.second.ras) {
-            std::cerr << "yamz server: try match for " << ma.clid
-                      << " = " << ma.nodeid << "/" << ma.clientid << "/" << ma.portid << " = " << ra.address << std::endl;
+            chirp(cfg, "try match for " << str(ma) << " = " << ra.address);
             if (! (ma.nodeid == "*" or ma.nodeid == ra.nodeid)) {
                 break;
             }
@@ -173,6 +173,7 @@ void yamz::server::Logic::notify_clients()
         for (const auto& rep : ci.tosend) {
             yamz::data_t jobj = rep;
             zmq::message_t msg(jobj.dump());
+            msg.set_routing_id(ci.remid);
             auto res = sock.send(msg, zmq::send_flags::none);
             if (!res) {
                 throw server_error("failed to reply to client " + ci.nick);
@@ -191,7 +192,7 @@ void yamz::server::Logic::go_online()
     zyre.set_header("YAMZ", jobj.dump()); 
     zyre.online();
     zyre_online = true;
-    std::cerr << "yamz server: go online with:\n" << jobj.dump() << std::endl;
+    chirp(cfg, "go online with:\n" << jobj.dump());
     std::string rep = gotem ? "OKAY" : "FAIL";
     zmq::message_t msg{rep};
     auto res = link.send(msg, zmq::send_flags::none);
@@ -234,7 +235,7 @@ void yamz::server::Logic::add_peer(const yamz::ZyreEvent& zev)
     auto zuuid = zev.peer_uuid();
     auto zaddr = zev.peer_addr();
 
-    std::cerr << "yamz server: add peer: " << znick << std::endl;
+    chirp(cfg, "add peer: " << znick);
 
     auto text = zev.header("YAMZ");
     auto jobj = yamz::data_t::parse(text);
@@ -257,10 +258,8 @@ void yamz::server::Logic::add_peer(const yamz::ZyreEvent& zev)
                 RemoteAddress ra{znick, client.clientid, port.portid,
                     addr_parms, just_addr, port.ztype};
                 pi.ras.emplace_back(std::move(ra));
-                std::cerr << "yamz server: add peer: "
-                          << client.clientid << "/"
-                          << port.portid << " = " << just_addr
-                          << std::endl;
+                chirp(cfg, "add peer: " << client.clientid << "/"
+                      << port.portid << " = " << just_addr);
             }
         }
     }
@@ -283,17 +282,17 @@ void yamz::server::Logic::del_peer(const yamz::ZyreEvent& zev)
 bool yamz::server::Logic::have_clients()
 {
     if (cfg.expected.empty()) {
-        std::cerr << "yamz server: no clients expected" << std::endl;
+        chirp(cfg, "no clients expected");
         // no expectation, yeah, sure, I have all I want, whatever
         return true;
     }
     for (const auto& nick : cfg.expected) {
         if (! clients.by_nick(nick)) {
-            std::cerr << "yamz server: expect client " << nick << std::endl;
+            chirp(cfg, "expect client " << nick);
             return false;
         }
     }
-    std::cerr << "yamz server: have expected clients: " << cfg.expected.size() << std::endl;
+    chirp(cfg, "have expected clients: " << cfg.expected.size());
     return true;
 }
 

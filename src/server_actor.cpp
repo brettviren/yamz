@@ -12,6 +12,8 @@
 
 namespace sml = boost::sml;
 
+#define chirp(strm) { std::stringstream ss; ss << "yamz::server::actor: " << strm << "\n"; std::cerr << ss.str(); }
+
 // define the server FSM
 namespace {
 
@@ -38,31 +40,31 @@ namespace {
 
     // forward actions to server::Logic
     const auto go_online = [](yamz::server::Logic& guts) {
-        std::cerr << "server actor: go online\n";
+        chirp("server actor: go online");
         guts.go_online();
     };
     const auto go_offline = [](yamz::server::Logic& guts) {
-        std::cerr << "server actor: go offline\n";
+        chirp("server actor: go offline");
         guts.go_offline();
     };
     const auto store_request = [](yamz::server::Logic& guts) {
-        std::cerr << "server actor: store request\n";
+        chirp("server actor: store request");
         guts.store_request();
     };
     const auto add_peer = [](yamz::server::Logic& guts, const PeerEnter& pe) {
-        std::cerr << "server actor: add peer\n";
+        chirp("server actor: add peer");
         guts.add_peer(pe.zev);
     };
     const auto del_peer = [](yamz::server::Logic& guts, const PeerExit& pe) {
-        std::cerr << "server actor: del peer\n";
+        chirp("server actor: del peer");
         guts.del_peer(pe.zev);
     };
     const auto notify_clients = [](yamz::server::Logic& guts) {
-        std::cerr << "server actor: notify clients\n";
+        chirp("server actor: notify clients");
         guts.notify_clients();
     };
     const auto say_hi = [](yamz::server::Logic& guts) {
-        std::cerr << "server actor: hi there\n";
+        chirp("server actor: hi there");
     };
 
     // forward guards to server::Logic 
@@ -121,7 +123,7 @@ static void
 handle_link(FSM& fsm, yamz::server::Logic& guts)
 {
     auto cmd = guts.recv_link();
-    std::cerr << "server actor: link hit: " << cmd << std::endl;
+    chirp("link hit: " << cmd);
     if (cmd == "ONLINE") {
         fsm.process_event(ServerOnline{});
         return;
@@ -136,7 +138,7 @@ handle_link(FSM& fsm, yamz::server::Logic& guts)
 static void
 handle_sock(FSM& fsm, yamz::server::Logic& guts)
 {
-    std::cerr << "server actor: sock hit" << std::endl;
+    chirp("sock hit");
     fsm.process_event(ClientRequest{});
 }
 
@@ -144,20 +146,20 @@ static void
 handle_zyre(FSM& fsm, yamz::server::Logic& guts)
 {
     auto zev = guts.recv_zyre();
-    std::cerr << "server actor: zyre hit: " << zev.type() << std::endl;
 
     if (zev.type() == "ENTER") {
-        std::cerr << "server actor: zyre ENTER: peer: "
-                  << zev.peer_name() << " [" << zev.peer_uuid() << "]"
-                  << std::endl;
-        std::cerr << zev.header("YAMZ") << std::endl;
+        chirp("zyre ENTER: peer: "
+              << zev.peer_name() << " uuid:[" << zev.peer_uuid() << "]");
+        //chirp(zev.header("YAMZ"));
         
         fsm.process_event(SayHi{});
         fsm.process_event(PeerEnter{zev});
-        std::cerr << "server actor: PeerEnter done\n";
         return;
     }
     if (zev.type() == "EXIT") {
+        chirp("zyre EXIT: peer: "
+              << zev.peer_name() << " uuid:[" << zev.peer_uuid() << "]");
+
         fsm.process_event(PeerExit{std::move(zev)});
         return;
     }
@@ -179,9 +181,9 @@ void yamz::server::actor(ActorArgs aa)
     poller.add(zsock, zmq::event_flags::pollin);
     std::vector<zmq::poller_event<>> events(3);
 
-    std::cerr << "server actor: entering loop" << std::endl;
+    chirp("entering main loop");
     while (true) {              // fixme: make way to break
-        std::cerr << "server actor: poll" << std::endl;
+        //chirp("polling");
         const int nevents = poller.wait_all(events, std::chrono::milliseconds{-1});
         for (int iev = 0; iev < nevents; ++iev) {
             if (events[iev].socket == guts.link) {
@@ -194,7 +196,7 @@ void yamz::server::actor(ActorArgs aa)
             }
             if (events[iev].socket == zsock) {
                 if (fsm.is(sml::state<Collecting>)) {
-                    std::cerr << "server actor: IN COLLECING STATE NOT DISCOVERY\n";
+                    chirp("IN COLLECING STATE NOT DISCOVERY");
                 }
                 handle_zyre(fsm, guts);
                 continue;
