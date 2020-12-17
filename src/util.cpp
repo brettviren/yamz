@@ -1,8 +1,13 @@
 #include "yamz/util.hpp"
 
+#include "czmq.h"
+
 #include <sstream>
 #include <algorithm>
 #include <regex>
+
+#include <signal.h>
+
 
 std::vector<std::string>
 yamz::parse_list(const std::string& str, std::string comma)
@@ -96,3 +101,22 @@ bool yamz::match(const psetmap_t& patts, const psetmap_t& parms)
     return true;
 }
 
+#include <iostream>             // debug
+
+static int s_interrupted = 0;
+static void s_signal_handler(int signal_value) { s_interrupted = 1; }
+bool yamz::interrupted() { return s_interrupted == 1; }
+
+
+
+void yamz::catch_signals()
+{
+    zsys_handler_set(NULL);
+    std::cerr << "yamz interupted\n";
+    struct sigaction action;
+    action.sa_handler = s_signal_handler;
+    action.sa_flags = 0;
+    sigemptyset(&action.sa_mask);
+    sigaction(SIGINT, &action, NULL);
+    sigaction(SIGTERM, &action, NULL);
+}

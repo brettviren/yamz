@@ -99,6 +99,7 @@ namespace yamz::server {
 
         Logic(zmq::context_t& ctx, const yamz::ServerConfig& cfg,
               const std::string& linkname);
+        ~Logic();
 
         // guards
         bool have_clients();

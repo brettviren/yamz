@@ -76,6 +76,10 @@ yamz::server::Logic::Logic(zmq::context_t& ctx, const yamz::ServerConfig& cfg,
     link.send(zmq::message_t{}, zmq::send_flags::none);
 }
 
+yamz::server::Logic::~Logic()
+{
+    chirp(cfg, "terminating");
+}
 
 void yamz::server::Logic::accept_client(remid_t remid,
                                         const yamz::ClientConfig& cc)

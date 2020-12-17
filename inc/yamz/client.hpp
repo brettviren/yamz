@@ -38,7 +38,7 @@ namespace yamz {
         Client(const Client&) = delete;
         Client operator=(const Client&) = delete;
 
-        /** Check for any replies from server.
+        /** Check for and recv any replies from server.
          *  
          *  A negative timeout will block forever.
          *
@@ -52,11 +52,21 @@ namespace yamz {
          *  For general thread-safe use of the sockets, this method
          *  must be called in the same thread as may later call get().
          *
-         *  throws client_error.
+         *  may throw client_error.
          */
         yamz::ClientAction
         discover(std::chrono::milliseconds
                  timeout=std::chrono::milliseconds(0));
+
+        /** Access the client socket.
+         *
+         * The application may use this socket in a poller to know
+         * when a message from the server is delivered.  The app may
+         * then call discover() to process that event but shall not
+         * directly recv the message.  The app may instead elect to
+         * call discover() periodically and rely on a timeout.
+         */
+        zmq::socket_t& socket() { return clisock; }
 
 
         struct PortInfo {

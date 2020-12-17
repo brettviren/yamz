@@ -122,10 +122,6 @@ yamz::ClientAction yamz::Client::discover(std::chrono::milliseconds timeout)
 
     //chirp("polling");
     const int nevents = poller.wait_all(events, timeout);
-    if (zsys_interrupted) {
-        chirp(cfg, "czmq interupted");
-        return yamz::ClientAction::terminate;
-    }
     if (!nevents) {
         return yamz::ClientAction::timeout;
     }

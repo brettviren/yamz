@@ -196,29 +196,26 @@ void yamz::server::actor(ActorArgs aa)
     chirp("entering main loop");
     while (! fsm.is(sml::X)) {
 
-        bool bail = false;
         //chirp("polling");
-        int nevents = 0;
-        try {
-            nevents = poller.wait_all(events, std::chrono::milliseconds{-1});
-        }
-        catch (zmq::error_t& e) {
-            chirp("error while polling: " << e.what());
-            bail = true;
-        }
-        if (zsys_interrupted) {
-            chirp("czmq interupted");
-            bail = true;
-        }
-        if (!nevents) {
-            chirp("main poll interupted");
-            bail = true;
-        }
-        if (bail) {
+
+        // In principle may throw.  Allow timeout to check for
+        // interupt to exit fast.
+        const int nevents = poller.wait_all(events,
+                                            std::chrono::milliseconds{100});
+        if (yamz::interrupted()) {
+            chirp("yamz interupted");
             fsm.process_event(ServerTerminate{});
-            assert(fsm.is(sml::X));
+            if (!fsm.is(sml::X)) {
+                throw server_error("server logic is broken, not terminated");
+            }
             break;
         }
+
+        if (!nevents) {
+            //chirp("main poll timeout");
+            continue;
+        }
+
         for (int iev = 0; iev < nevents; ++iev) {
             if (events[iev].socket == guts.link) {
                 handle_link(fsm, guts);
@@ -229,8 +226,8 @@ void yamz::server::actor(ActorArgs aa)
                 continue;
             }
             if (events[iev].socket == zsock) {
-                if (fsm.is(sml::state<Collecting>)) {
-                    chirp("IN COLLECING STATE NOT DISCOVERY");
+                if (! fsm.is(sml::state<Discovery>)) {
+                    throw server_error("server logic is broken, not Discovery");
                 }
                 handle_zyre(fsm, guts);
                 continue;

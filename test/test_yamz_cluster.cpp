@@ -26,6 +26,7 @@
 
 #include <yamz/server.hpp>
 #include <yamz/client.hpp>
+#include <yamz/util.hpp>
 #include <yamz/Nljs.hpp>
 
 #include <iostream>
@@ -122,52 +123,39 @@ void cluster_component(zmq::context_t& ctx, ClientConfig cfg)
     auto& paskyou = cli.get("askyou"); // client-like port
     auto& askme = paskme.sock;
     auto& askyou = paskyou.sock;
+    auto& csock = cli.socket();
 
-
-    while (paskyou.conns.empty()) {
-        chirp(cfg, "wait for at least one connection");
-        auto what = cli.discover();
-        if (what == yamz::ClientAction::timeout) {
-            std::this_thread::sleep_for(std::chrono::milliseconds{1000});
-            continue;
-        }
-        if (what == yamz::ClientAction::terminate) {
-            chirp(cfg, "terminate");
-            return;
-        }
-        break;
-    }
-
-    askyou.set(zmq::sockopt::sndtimeo, 0);
+    //askyou.set(zmq::sockopt::sndtimeo, 0);
 
     zmq::poller_t<> poller;
     poller.add(askme, zmq::event_flags::pollin);
     poller.add(askyou, zmq::event_flags::pollin);
-    std::vector<zmq::poller_event<>> events(2);
+    poller.add(csock, zmq::event_flags::pollin);
+    std::vector<zmq::poller_event<>> events(3);
     std::chrono::milliseconds timeout{10000};
-    while (true) {              // fixme: make way to break
-        auto what = cli.discover();
-        if (what == yamz::ClientAction::terminate) {
-            chirp(cfg, "terminate");
-            break;
-        }
 
+    bool keep_going{true};
+    while (keep_going) {
 
         //chirp(cfg, "poll on sockets");
-        int nevents = 0;
-        try {
-            nevents = poller.wait_all(events, timeout);
-        }
-        catch (zmq::error_t& e) {
-            chirp(cfg, "poll failure: " << e.what());
-            break;
-        }
-        if (!nevents) {
+        const int nevents = poller.wait_all(events, timeout);
+
+        if (!nevents and !paskyou.conns.empty()) {
             chirp(cfg, "timeout, make request");
             make_request(cfg, askyou);
             continue;
         }
+
         for (int iev = 0; iev < nevents; ++iev) {
+
+            if (events[iev].socket == csock) { // service client
+                auto what = cli.discover();
+                if (what == yamz::ClientAction::terminate) {
+                    chirp(cfg, "terminate");
+                    keep_going = false;
+                    break;
+                }
+            }
 
             if (events[iev].socket == askme) { // get request
                 //chirp(cfg, "got request");
@@ -179,13 +167,15 @@ void cluster_component(zmq::context_t& ctx, ClientConfig cfg)
                 handle_reply(cfg, askyou);
             }
         }
-        // fixme: add making a request
+
     }
     chirp(cfg, "exiting");
 }
 
 int main(int argc, char* argv[])
 {
+    yamz::catch_signals();
+
     if (argc != 2) {
         std::cerr << "usage: test_yamz_cluster config.json" << std::endl;
         return 0;               // don't consider this a failure

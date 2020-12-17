@@ -50,6 +50,22 @@ namespace yamz {
     // hosts with multiple gateways.
     std::string myip();
 
+    /*! Return true when a signal has been sent to the application.
+     *
+     * Exit main loop if ever true.
+     *
+     * The catch_signals() function must be called in main() for
+     * this to ever return true.
+     */
+    bool interrupted();
+
+    /*! Catch signals and set interrupted to true.
+     *
+     *  This must be called from main() if interrupted() wil ever
+     *  return true.  */
+    void catch_signals();
+
+
 }
 
 
