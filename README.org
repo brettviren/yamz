@@ -241,3 +241,15 @@ and calculating the latency to get a response all the while responding
 to these requests from others.
 
 
+* Todo
+
+yamz is at a "minimum viable" level.  Some items still under consideration:
+
+- [ ] integration (via an adapter package) with DUNE DAQ.
+
+- [ ] publishing ~connect()~ resolutions to a Zyre group, and a Zyre whisper based query to retrieve server state.
+
+- [ ] a demo of a Zyre app that collects both YAMZ header ~bind()~ and published ~connect()~ resolutions to illustrate monitoring and visualization of the full graph of links.
+
+
+
