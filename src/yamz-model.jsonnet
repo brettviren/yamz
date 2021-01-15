@@ -6,19 +6,12 @@ local os = import "yamz-schema.jsonnet";
 local oschema = import "oschema.jsonnet";
 local ocpp = import "ocpp.jsonnet";
 {
+
     lang: ocpp,
 
     // The path/namespace this model "lives" in
     path: oschema.listify("yamz"),
-    nspre: oschema.prepath(self.path),
 
-    // The path/namespace this model is assumed to be in.  It should
-    // be a leading part of the path
-    ctxpath: oschema.listify("yamz"),
-    ctxpre: oschema.prepath(self.ctxpath),
-
-    relpath: "",
-    
     // Select out the types "in" this namespace.
     types: [t for t in os if oschema.isin(self.path, t.path)],
     all_types: os,

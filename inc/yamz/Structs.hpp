@@ -285,14 +285,17 @@ namespace yamz {
     // @brief 
     using NanoSecs = int32_t;
 
+
     // @brief A hierarchy path
     using Path = std::string;
 
     // @brief A IP port number
     using PortNum = int32_t;
 
+
     // @brief 
     using Secs = int64_t;
+
 
     // @brief A yamz server configuration object
     struct ServerConfig {

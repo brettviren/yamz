@@ -11,8 +11,8 @@ yamz::Client::Client(zmq::context_t& ctx, const yamz::ClientConfig& newcfg)
     connect_server();
     make_ports();
     do_binds();
-    make_request();
 }
+
 yamz::Client::~Client()
 {
     std::cerr << "client: destructing" << std::endl;
@@ -23,66 +23,104 @@ yamz::Client::~Client()
 
 yamz::Client::PortInfo& yamz::Client::get(std::string portid)
 {
-    auto it = ports.find(portid);
-    if ( it == ports.end() ) {
+    auto it = portinfos.find(portid);
+    if ( it == portinfos.end() ) {
         throw yamz::client_error("client has no such port: " + portid);
     }
     return it->second;
 }
 
+bool yamz::Client::make_port(std::string portid, int stype)
+{
+    auto it = portinfos.find(portid);
+    if ( it != portinfos.end() ) {
+        return false;
+    }
+        
+    const size_t ind = cfg.ports.size();
+
+    // keep cfg/ports in sync
+    cfg.ports.emplace_back(yamz::ClientPort{portid, static_cast<yamz::SockType>(stype)});
+
+    auto ztype = static_cast<zmq::socket_type>(stype);
+    portinfos[portid] = PortInfo{portid, zmq::socket_t(ctx, ztype), ind};
+
+    return true;
+}
+
 void yamz::Client::make_ports()
 {
     // one time call
-    if (! ports.empty()) { return; }
+    if (! portinfos.empty()) { return; }
     
-    for (auto& portcfg : cfg.ports) {
+    const size_t nports = cfg.ports.size();
+    for (size_t ind=0; ind<nports; ++ind) {
+        auto& portcfg = cfg.ports.at(ind);
         auto portid = portcfg.portid;
-        if (ports.find(portid) != ports.end()) {
+        if (portinfos.find(portid) != portinfos.end()) {
             throw yamz::client_error("nonunique port name: " + portid);
         }
 
         auto ztype = static_cast<zmq::socket_type>(portcfg.ztype);
-        ports[portid] = PortInfo{portid, zmq::socket_t(ctx, ztype)};
+        portinfos[portid] = PortInfo{portid, zmq::socket_t(ctx, ztype), ind};
     }
 }
 
-void yamz::Client::do_binds()
+// Register for address for connect
+void yamz::Client::connect(std::string portid, std::string addr)
 {
-    if (bound) { return; }
+    auto& pi = get(portid);
+    auto& portcfg = cfg.ports.at(pi.ccpind);
+    portcfg.conns.push_back(addr);
+    // fixme: want to add some kind of short circuit for concrete
+    // connect addresses for when the client is configured with no
+    // server.  Ie, to operate in "direct" mode.
+}
 
-    for (auto& portcfg : cfg.ports) {
-        auto portid = portcfg.portid;
-        auto& pi = get(portid);
-        for (size_t ind=0; ind<portcfg.binds.size(); ++ind) {
 
-            // fixme: add this bit of address fiddling to util
+// Bind address to port and update our records
+void yamz::Client::bind(std::string portid, std::string addr)
+{
+    const std::string orig = addr;
+    auto uri = yamz::uri::parse(addr);
+    auto& pi = get(portid);
+    auto& portcfg = cfg.ports.at(pi.ccpind);
 
-            auto addr = portcfg.binds[ind];
-            auto uri = yamz::uri::parse(addr);
-
-            // check for an resolve inproc://*
-            if (uri.scheme == "inproc") {
-                if (uri.domain == "*") {
-                    uri.domain = cfg.clientid + "-" + portid;
-                }
-            }
-            if (uri.scheme == "tcp") {
-                if (uri.domain == "*") {
-                    uri.domain = yamz::myip();
-                }
-            }
-            addr = yamz::str(uri, false); // no params
-            pi.sock.bind(addr);    //  may throw
-            auto conc = pi.sock.get(zmq::sockopt::last_endpoint);
-
-            chirp(cfg, "bind " << portcfg.binds[ind]
-                  << " -> " << addr
-                  << " -> " << conc);
-            portcfg.binds[ind] = conc;
-            pi.binds.push_back(conc);
+    // check for an resolve inproc://*
+    if (uri.scheme == "inproc") {
+        if (uri.domain == "*") {
+            uri.domain = cfg.clientid + "-" + portid;
         }
     }
-    bound = true;
+    if (uri.scheme == "tcp") {
+        if (uri.domain == "*") {
+            uri.domain = yamz::myip();
+        }
+    }
+    addr = yamz::str(uri, false); // no params
+    pi.sock.bind(addr);           // may throw
+    auto conc = pi.sock.get(zmq::sockopt::last_endpoint);
+    chirp(cfg, "bind " << orig << " -> " << addr << " -> " << conc);
+    portcfg.binds.push_back(conc);
+    pi.binds.push_back(conc);
+
+}
+
+// Walk through existing configuration and apply any binds
+void yamz::Client::do_binds()
+{
+    for (auto& portcfg : cfg.ports) {
+        auto portid = portcfg.portid;
+
+        auto to_bind = portcfg.binds;
+
+        // temporary clear this vector, bind() fills it up again
+        // with resolved bind.
+        portcfg.binds.clear();
+        for (auto& addr : to_bind) {
+            bind(portid, addr);
+        }
+    }
 }
 
 void yamz::Client::connect_server()
@@ -135,8 +173,8 @@ yamz::ClientAction yamz::Client::discover(std::chrono::milliseconds timeout)
 
     chirp(cfg, "reply: " << jobj.dump());
 
-    auto it = ports.find(rep.portid);
-    if (it == ports.end()) {
+    auto it = portinfos.find(rep.portid);
+    if (it == portinfos.end()) {
         throw yamz::client_error("yamz server gave unknown port: " + rep.portid);
     }
     PortInfo& pi = it->second;

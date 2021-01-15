@@ -119,6 +119,7 @@ static void make_request(const ClientConfig& cfg, zmq::socket_t& sock)
 void cluster_component(zmq::context_t& ctx, ClientConfig cfg)
 {
     yamz::Client cli(ctx, cfg);
+    cli.make_request();
     auto& paskme = cli.get("askme");   // server-like port
     auto& paskyou = cli.get("askyou"); // client-like port
     auto& askme = paskme.sock;

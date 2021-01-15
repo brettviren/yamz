@@ -7,17 +7,15 @@
 #ifndef YAMZ_NLJS_HPP
 #define YAMZ_NLJS_HPP
 
-
-#include "Structs.hpp"
+// My structs
+#include "yamz/Structs.hpp"
 
 
 #include <nlohmann/json.hpp>
 
 namespace yamz {
 
-    using data_t = nlohmann::json;
-
-    NLOHMANN_JSON_SERIALIZE_ENUM( ApiCommands, {
+    using data_t = nlohmann::json;    NLOHMANN_JSON_SERIALIZE_ENUM( ApiCommands, {
             { yamz::ApiCommands::terminate, "terminate" },
             { yamz::ApiCommands::online, "online" },
             { yamz::ApiCommands::offline, "offline" },
@@ -263,8 +261,6 @@ namespace yamz {
             j.at("clients").get_to(obj.clients);    
     }
     
-    // fixme: add support for MessagePack serializers (at least)
-
 } // namespace yamz
 
 #endif // YAMZ_NLJS_HPP

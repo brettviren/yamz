@@ -25,12 +25,16 @@ namespace yamz {
       public:
 
         /** 
-           Create yamz::Client connection to a yamz::Server.
-           
-           Context must be same as used for yamz::Server if inproc://
-           is used.
+           Create a yamz::Client
 
-           The name give the component identifier used in discovery.
+           This will immediately connect to servers (which of course
+           need not be around yet) as per ClientConfig.
+           
+           ZeroMQ context must be same as used for yamz::Server if
+           inproc:// is used.
+
+           Sockets for ports described in ClientConfig will be made
+           immediately.
         */
         Client(zmq::context_t& ctx, const ClientConfig& cfg = {});
         ~Client();
@@ -38,7 +42,46 @@ namespace yamz {
         Client(const Client&) = delete;
         Client operator=(const Client&) = delete;
 
-        /** Check for, recv and process replies queued from server.
+        /** Make a port.
+         *
+         * Adds port entry to the ClientConfig that will be sent as
+         * server request.
+         *
+         * Return true if new port is made, false if it existed.
+         *
+         * A co responding @ref PortInfo object may be retrieved via
+         * @ref get().
+         */
+        bool make_port(std::string portid, int stype);
+
+        /** Register a bind address to an existing port.
+         *
+         * Address may be ephemeral or concrete.
+         *
+         * A socket bind() is performed immediately and the resulting
+         * concrete port is added to the PortInfo.
+         */
+        void bind(std::string portid, std::string addr);
+
+        /** Register a connect address to an existing port.
+         *
+         * Address may be abstract or concrete.
+         *
+         * Socket connect will be performed based on server replies.
+         *
+         */
+        void connect(std::string portid, std::string addr);
+
+        /** Make request to server.  
+         *
+         * This call is idempotent and will only make a single request
+         * if called multiple times.
+         *
+         * Any subseqent bind or connect will not make it to the server.
+         */
+        void make_request();
+
+        /** Check for, recv and process a reply queued from server.
          *  
          *  A negative timeout will block until at one message is processed.
          *
@@ -58,7 +101,7 @@ namespace yamz {
         discover(std::chrono::milliseconds
                  timeout=std::chrono::milliseconds(0));
 
-        /** Access the client socket.
+        /** Access the socket possibly linked to yamz::Servers.
          *
          * The application may use this socket in a poller to know
          * precisely when a message from the server is delivered.  The app may
@@ -68,39 +111,37 @@ namespace yamz {
          */
         zmq::socket_t& socket() { return clisock; }
 
-
+        /** A PortInfo collects information about a socket and its
+         * concrete address. */
         struct PortInfo {
             // The portid 
             std::string name;
             // The socket object
             zmq::socket_t sock;
-            // remember concrete addresses of binds and connects
+            // Index into ClientConfig::ports
+            size_t ccpind;
+            // Remember concrete addresses of binds and connects
             std::vector<std::string> binds, conns;
         };
 
         /** Return named port
          *
-         *  Throws client_errror if port does not exist.
-         *
-         *  For general thread-safe use of the socket, this method
-         *  must be called in the same thread as which called
-         *  discover().
+         *  Throws client_error if port does not exist.
          */
-        PortInfo& get(std::string port);
+        PortInfo& get(std::string portid);
 
     private:
         zmq::context_t& ctx;
         ClientConfig cfg;
 
         zmq::socket_t clisock;
-        std::map<std::string, PortInfo> ports;
+        std::map<std::string, PortInfo> portinfos;
 
-        // Break up client-side steps of yamz c/s protocol 
+        // Break up some steps but these are all called in constructor.
         void connect_server();
         void make_ports();
         void do_binds();
-        bool bound{false};
-        void make_request();
+
         bool requested{false};
     };
 
