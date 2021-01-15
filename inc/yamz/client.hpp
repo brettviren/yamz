@@ -38,21 +38,21 @@ namespace yamz {
         Client(const Client&) = delete;
         Client operator=(const Client&) = delete;
 
-        /** Check for and recv any replies from server.
+        /** Check for, recv and process replies queued from server.
          *  
-         *  A negative timeout will block forever.
+         *  A negative timeout will block until at one message is processed.
          *
-         *  Return the client action as given by the server.  If
-         *  ClientAction::terminate is returned, app should exit the
-         *  thread using this client.
+         *  Return the client action as given by the server. 
          *
-         *  This method must be called periodically in order to
-         *  discover any newly arrived peers.
+         * - connect :: a new connection has been made
+         * - disconnect :: a disconnection has been made
+         * - terminate :: the server has terminated (probably client should too)
+         * - timeout :: timeout occured with no messages processed
          *
-         *  For general thread-safe use of the sockets, this method
-         *  must be called in the same thread as may later call get().
+         *  This method must be called in order for the client to
+         *  react to any changes in the network of peers.  
          *
-         *  may throw client_error.
+         *  May throw client_error.
          */
         yamz::ClientAction
         discover(std::chrono::milliseconds
@@ -61,9 +61,9 @@ namespace yamz {
         /** Access the client socket.
          *
          * The application may use this socket in a poller to know
-         * when a message from the server is delivered.  The app may
-         * then call discover() to process that event but shall not
-         * directly recv the message.  The app may instead elect to
+         * precisely when a message from the server is delivered.  The app may
+         * then call discover() to process that event.  App shall not
+         * directly recv() the message.  The app may instead of polling elect to
          * call discover() periodically and rely on a timeout.
          */
         zmq::socket_t& socket() { return clisock; }

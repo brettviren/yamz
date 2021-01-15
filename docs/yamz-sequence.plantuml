@@ -1,0 +1,87 @@
+@startuml
+!pragma teoz true
+box "App A\n main thread"
+        participant "main()" as main
+end box
+box "App A client thread\n(eg appfwk module worker thread)"
+        participant "app code" as app
+        participant "yamz::Client 1" as yc1
+        participant "yamz::Client 2" as yc2
+end box
+box "App A (ysA)\n server thread"
+        participant "yamz::Server ysA" as ysA
+end box
+box "App B (ysB)\n server thread"
+        participant "yamz::Server ysB" as ysB
+end box
+box "App C (ysC)\n server thread"
+        participant "yamz::Server ysC" as ysC
+end box
+
+group Start yamz server internal to app
+main -> ysA : ctor("expect two clients")
+main -> ysA : start()
+activate ysA
+end
+
+main -> app : ctor()
+activate app
+
+group Construct clients which make requests
+
+app -> yc1 : ctor(cfg)
+activate yc1
+& yc1 -> ysA : connect
+yc1 -> yc1 : make ports
+yc1 -> yc1 : do binds
+yc1 -> ysA : msg:request(ysB)\nnumber 1/2
+
+app -> yc2 : ctor(cfg)
+activate yc2
+& yc2 -> ysA : connect
+yc2 -> yc2 : make ports
+yc2 -> yc2 : do binds
+yc2 -> ysA : msg:request(ysB,ysC)\nnumber 2/2
+
+& ysA -> ysA : online()
+activate ysA
+end 
+
+ysB -> ysB : online
+activate ysB
+
+group Server replies to client driven by peers, app polls client to process queues
+
+ysB <-> ysA : Zyre ENTER ysB/ysA
+
+                
+ysA --> yc1 : msg:reply(ysB connects)\nqueue
+ysA --> yc2 : msg:reply(ysB connects)\nqueue
+& app -> app : work
+app -> yc1 : discover()
+& yc1 -> yc1 : connect(ysB)                
+
+app -> app : work
+app -> yc1 : discover()
+& yc1 -> yc1 : noop                        
+
+& ysC -> ysC : online
+activate ysC
+ysC <-> ysA : Zyre ENTER ysC/ysA
+ysC <-> ysB : Zyre ENTER ysC/ysB
+
+& ysA --> yc2 : msg:reply(ysC connects)\nqueue
+
+ysB -> ysA : Zyre EXIT ysB
+& ysB -> ysC : Zyre EXIT ysB
+destroy ysB
+ysA --> yc1 : msg:reply(ysB disconnects)\nqueue
+ysA --> yc2 : msg:reply(ysB disconnects)\nqueue
+
+& app -> app : work
+app -> yc2 : discover()
+& yc2 -> yc2 : connect(ysB)
+yc2 -> yc2 : connect(ysC)
+yc2 -> yc2 : disconnect(ysB)
+
+@enduml
