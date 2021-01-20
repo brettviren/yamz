@@ -112,6 +112,21 @@ def build(bld):
               source=sources, target='yamz',
               uselib_store='YAMZ', use=use)
 
+    bld.install_files('${PREFIX}/include/yamz', 
+                      bld.path.ant_glob("inc/yamz/**/*.hpp"),
+                      cwd=bld.path.find_dir('inc/yamz'),
+                      relative_trick=True)
+
+    # fake pkg-config
+    bld(source='libyamz.pc.in', VERSION=VERSION,
+        LLIBS='-lyamz', REQUIRES='libczmq libzmq libzyre')
+    # fake libtool
+    bld(features='subst',
+        source='libyamz.la.in', target='libyamz.la',
+        **bld.env)
+    bld.install_files('${PREFIX}/lib',
+                      bld.path.find_or_declare("libyamz.la"))
+
     tsources = bld.path.ant_glob('test/test*.cpp')
     if tsources and not bld.options.no_tests:
         features = 'test cxx'

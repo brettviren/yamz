@@ -42,6 +42,12 @@ namespace yamz {
         Client(const Client&) = delete;
         Client operator=(const Client&) = delete;
 
+        /** Add a YAMZ server address.
+         *
+         * If used, must call before make_request().
+         */
+        void add_server(const std::string& server_address);
+
         /** Make a port.
          *
          * Adds port entry to the ClientConfig that will be sent as
@@ -81,19 +87,25 @@ namespace yamz {
          */
         void make_request();
 
-        /** Check for, recv and process a reply queued from server.
+        /** Check for, recv and process at most one reply from server.
          *  
-         *  A negative timeout will block until at one message is processed.
+         *  A negative timeout will block until at one message is
+         *  processed.
          *
-         *  Return the client action as given by the server. 
+         * The return value is a yamz::ClientAction:
          *
          * - connect :: a new connection has been made
          * - disconnect :: a disconnection has been made
          * - terminate :: the server has terminated (probably client should too)
          * - timeout :: timeout occured with no messages processed
          *
-         *  This method must be called in order for the client to
-         *  react to any changes in the network of peers.  
+         *  When action is "connect" or "disconnect" the client will
+         *  apply the action to the coresponding socket.  
+         *
+         *  See also last_reply().
+         *
+         *  The discover() method must be called in order for the
+         *  client to react to any changes in the network of peers.
          *
          *  May throw client_error.
          */
@@ -101,15 +113,19 @@ namespace yamz {
         discover(std::chrono::milliseconds
                  timeout=std::chrono::milliseconds(0));
 
+        /** Return the full content of last received reply */
+        yamz::ClientReply last_reply() const { return m_last_reply; }
+
         /** Access the socket possibly linked to yamz::Servers.
          *
          * The application may use this socket in a poller to know
-         * precisely when a message from the server is delivered.  The app may
-         * then call discover() to process that event.  App shall not
-         * directly recv() the message.  The app may instead of polling elect to
-         * call discover() periodically and rely on a timeout.
+         * precisely when a message from the server is delivered.  The
+         * app may then call discover() to process that event.  App
+         * shall not directly recv() the message.  The app may instead
+         * of polling elect to call discover() periodically and rely
+         * on a timeout.
          */
-        zmq::socket_t& socket() { return clisock; }
+        zmq::socket_t& socket() { return m_clisock; }
 
         /** A PortInfo collects information about a socket and its
          * concrete address. */
@@ -124,25 +140,35 @@ namespace yamz {
             std::vector<std::string> binds, conns;
         };
 
-        /** Return named port
+        /** Return info about named port
          *
          *  Throws client_error if port does not exist.
          */
         PortInfo& get(std::string portid);
+        const PortInfo& get(std::string portid) const;
+
+        using PortInfos = std::map<std::string, PortInfo>;
+        const PortInfos& portinfos() const { return m_portinfos; }
+
+        const ClientConfig& config() const { return m_cfg; }
+        ClientConfig& config() { return m_cfg; }
 
     private:
-        zmq::context_t& ctx;
-        ClientConfig cfg;
+        zmq::context_t& m_ctx;
+        ClientConfig m_cfg;
 
-        zmq::socket_t clisock;
-        std::map<std::string, PortInfo> portinfos;
+        zmq::socket_t m_clisock;
+        std::map<std::string, PortInfo> m_portinfos;
+
+        yamz::ClientReply m_last_reply{};
+        bool m_requested{false};
 
         // Break up some steps but these are all called in constructor.
         void connect_server();
         void make_ports();
         void do_binds();
 
-        bool requested{false};
+
     };
 
 }
