@@ -29,6 +29,8 @@ def options(opt):
                    help='Compile but do not run the tests (default=%default)')
     opt.add_option('--with-libzmq', default=None,
                    help='Set to libzmq install area')
+    opt.add_option('--with-cppzmq', default=None,
+                   help='Set to cppzmq install area')
     opt.add_option('--with-nljs', default=None,
                    help='Point nlohmann json install area')
 
@@ -49,8 +51,16 @@ def configure(cfg):
     cfg.check(features='cxx cxxprogram', define_name='HAVE_NLJS',
               header_name='nlohmann/json.hpp',
               use='NLJS', uselib_store='NLJS', mandatory=True)
+    # cppzmq
+    cppzmq = getattr(cfg.options, 'with_cppzmq', None)
+    if cppzmq:
+        print("using " + cppzmq)
+        setattr(cfg.env, 'INCLUDES_CPPZMQ', [osp.join(cppzmq, "include")])
+    cfg.check(features='cxx cxxprogram', define_name='HAVE_CPPZMQ',
+              header_name='zmq.hpp',
+              use='CPPZMQ', uselib_store='CPPZMQ', mandatory=True)
+
     # fixme: fallback to vendored version
-    # fixme: add cppzmq
     # fixme: add sml
 
     # libzmq
@@ -86,7 +96,7 @@ def configure(cfg):
 
 def build(bld):
 
-    use = ['ZYRE', 'ZMQ', 'NLJS']
+    use = ['ZYRE', 'ZMQ', 'NLJS', 'CPPZMQ']
     rpath = [bld.env["PREFIX"] + '/lib']
     rpath += [bld.env["LIBPATH_%s"%u][0] for u in use if bld.env["LIBPATH_%s"%u]]
     rpath = list(set(rpath))
@@ -107,7 +117,7 @@ def build(bld):
 
     sources = bld.path.ant_glob('src/*.cpp')
     bld.shlib(features='cxx',
-              includes='inc inc/cppzmq',
+              includes='inc',
               rpath=rpath,
               source=sources, target='yamz',
               uselib_store='YAMZ', use=use)
@@ -139,7 +149,7 @@ def build(bld):
             if tmain.name.startswith("test_yamz"):
                 # depends on yamz internals
                 uses.insert(0, "yamz")
-                includes += ['inc', 'inc/cppzmq', 'src']
+                includes += ['inc', 'src']
 
             bld.program(features=features,
                         source=[tmain], target=tmain.name.replace('.cpp', ''),
