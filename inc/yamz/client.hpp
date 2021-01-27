@@ -150,6 +150,14 @@ namespace yamz {
         using PortInfos = std::map<std::string, PortInfo>;
         const PortInfos& portinfos() const { return m_portinfos; }
 
+        std::vector<std::string> portnames() const {
+            std::vector<std::string> ret;
+            for (const auto& pi : m_portinfos) {
+                ret.push_back(pi.first);
+            }
+            return ret;
+        }
+
         const ClientConfig& config() const { return m_cfg; }
         ClientConfig& config() { return m_cfg; }
 
