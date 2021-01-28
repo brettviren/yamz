@@ -249,7 +249,7 @@ namespace yamz {
         Ident clientid = "";
 
         // @brief The server addresses to which the client shall connect
-        ConcreteAddresses servers = {"inproc://yamz"};
+        ConcreteAddresses servers = {};
 
         // @brief Any client-level identity parameters
         IdentityParameters idparms = {};
@@ -304,11 +304,11 @@ namespace yamz {
         // @brief The name by which this yamz node is known on the network
         Ident nodeid = "";
 
-        // @brief The IP port number on which Zyre operates
-        PortNum portnum = 5670;
-
         // @brief The addresses to which the server shall bind
         ConcreteAddresses addresses = {"inproc://yamz"};
+
+        // @brief The IP port number on which Zyre operates
+        PortNum portnum = 5670;
 
         // @brief Any node-level identity parameters
         IdentityParameters idparms = {};

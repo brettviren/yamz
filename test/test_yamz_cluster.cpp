@@ -119,7 +119,7 @@ static void make_request(const ClientConfig& cfg, zmq::socket_t& sock)
 void cluster_component(zmq::context_t& ctx, ClientConfig cfg)
 {
     yamz::Client cli(ctx, cfg);
-    cli.make_request();
+    cli.initialize();
     auto& paskme = cli.get("askme");   // server-like port
     auto& paskyou = cli.get("askyou"); // client-like port
     auto& askme = paskme.sock;
@@ -150,7 +150,7 @@ void cluster_component(zmq::context_t& ctx, ClientConfig cfg)
         for (int iev = 0; iev < nevents; ++iev) {
 
             if (events[iev].socket == csock) { // service client
-                auto what = cli.discover();
+                auto what = cli.poll();
                 if (what == yamz::ClientAction::terminate) {
                     chirp(cfg, "terminate");
                     keep_going = false;

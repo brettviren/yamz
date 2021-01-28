@@ -149,8 +149,8 @@ namespace yamz {
     
     inline void to_json(data_t& j, const ServerConfig& obj) {
         j["nodeid"] = obj.nodeid;
-        j["portnum"] = obj.portnum;
         j["addresses"] = obj.addresses;
+        j["portnum"] = obj.portnum;
         j["idparms"] = obj.idparms;
         j["idpatts"] = obj.idpatts;
         j["expected"] = obj.expected;
@@ -159,10 +159,10 @@ namespace yamz {
     inline void from_json(const data_t& j, ServerConfig& obj) {
         if (j.contains("nodeid"))
             j.at("nodeid").get_to(obj.nodeid);    
-        if (j.contains("portnum"))
-            j.at("portnum").get_to(obj.portnum);    
         if (j.contains("addresses"))
             j.at("addresses").get_to(obj.addresses);    
+        if (j.contains("portnum"))
+            j.at("portnum").get_to(obj.portnum);    
         if (j.contains("idparms"))
             j.at("idparms").get_to(obj.idparms);    
         if (j.contains("idpatts"))

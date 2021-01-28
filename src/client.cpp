@@ -1,14 +1,23 @@
-#include <yamz/client.hpp>
-#include <yamz/util.hpp>
-#include <yamz/uri.hpp>
-#include <yamz/Nljs.hpp>
+#include "yamz/client.hpp"
+#include "yamz/server.hpp"
+#include "yamz/util.hpp"
+#include "yamz/uri.hpp"
+#include "yamz/Nljs.hpp"
 
 #include <iostream>             // debug
+
+yamz::Client::Client(zmq::context_t& ctx)
+    : m_ctx(ctx)
+{
+}
+yamz::Client::Client(zmq::context_t& ctx, const std::string& clientid)
+    : m_ctx(ctx), m_cfg{clientid}
+{
+}
 
 yamz::Client::Client(zmq::context_t& ctx, const yamz::ClientConfig& newcfg)
     : m_ctx(ctx), m_cfg(newcfg)
 {
-    connect_server();
     make_ports();
     do_binds();
 }
@@ -125,20 +134,48 @@ void yamz::Client::do_binds()
     }
 }
 
-void yamz::Client::connect_server()
+yamz::Client::Mode yamz::Client::initialize()
 {
-    if (m_clisock) { return; }
-
-    m_clisock = zmq::socket_t(m_ctx, zmq::socket_type::client);
-    for (const auto& addr : m_cfg.servers) {
-        chirp(m_cfg, "connect to server at " << addr);
-        m_clisock.connect(addr);
+    if (m_mode != Mode::uninitialized) {
+        return m_mode;          // been here
     }
-}
 
-void yamz::Client::make_request()
-{
-    if (m_requested) { return; }
+    if (m_cfg.servers.empty()) {
+        if (m_cfg.clientid.empty() or m_cfg.clientid == "") {
+            // direct mode
+            m_mode = Mode::direct;
+            for (auto& portcfg : m_cfg.ports) {
+                for (auto& addr : portcfg.conns) {
+                    // fixme: warn if yamz:// found
+                    auto& pi = m_portinfos[portcfg.portid];
+                    pi.sock.connect(addr);
+                    pi.conns.push_back(addr);
+                    chirp(m_cfg, portcfg.portid << " connected to: " << addr);
+                }
+            }
+            return m_mode;
+        }
+
+        // self-serve mode
+        m_mode = Mode::selfserve;
+        m_clisock = zmq::socket_t(m_ctx, zmq::socket_type::client);
+        yamz::ServerConfig scfg{m_cfg.clientid,
+                                {"inproc://" + m_cfg.clientid + "-selfserv"}};
+        m_server = std::make_unique<yamz::Server>(m_ctx, scfg);
+        m_server->start();
+    }
+    else {
+        // external / app-level server mode
+        m_mode = Mode::extserver;
+        m_clisock = zmq::socket_t(m_ctx, zmq::socket_type::client);
+
+        for (const auto& addr : m_cfg.servers) {
+            chirp(m_cfg, "connect to server at " << addr);
+            m_clisock.connect(addr);
+        }
+    }
+
+    // both selfserve and extserver talk to the server
 
     yamz::data_t obj = m_cfg;
     zmq::message_t msg(obj.dump());
@@ -147,11 +184,16 @@ void yamz::Client::make_request()
         throw yamz::client_error("failed to send request");
     }
     chirp(m_cfg, "made request to server: " << obj.dump());
-    m_requested = true;
+    return m_mode;
 }
 
-yamz::ClientAction yamz::Client::discover(std::chrono::milliseconds timeout)
+yamz::ClientAction yamz::Client::poll(std::chrono::milliseconds timeout)
 {
+    if (m_mode == Mode::uninitialized or m_mode == Mode::direct) {
+        return yamz::ClientAction::timeout;
+    }
+    // other two modes work through the client socket.
+
     // int timeo = static_cast<int>(timeout.count());
     // clisock.set(zmq::sockopt::rcvtimeo, timeo);
     zmq::message_t msg;
