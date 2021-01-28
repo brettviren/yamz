@@ -118,7 +118,7 @@ local yamz = {
                 doc="Any node-level identity patterns"),
         s.field("expected", self.idents,
                 default=[],
-                doc="A set of peer nodes to expect to discover"),
+                doc="The set of client IDs we expect to connect"),
     ], doc="A yamz server configuration object"),
 
 

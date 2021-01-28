@@ -22,9 +22,18 @@ void do_it(yamz::Client& c1, yamz::Client& c2, yamz::Client::Mode mode)
         assert ( mode == c2.initialize() );
     }
 
-    std::cerr << "poll clients\n" ;
-    assert ( c1.poll() == yamz::ClientAction::timeout );
-    assert ( c2.poll() == yamz::ClientAction::timeout );
+    const std::chrono::milliseconds delay{1000};
+    if (mode != yamz::Client::Mode::direct) {
+        std::cerr << "poll clients\n" ;
+        int count = 0;
+        while (true) {
+            std::cerr << "poll c2 "<<count++<<"\n" ;
+            auto res = c2.poll(delay);
+            if (res == yamz::ClientAction::connect) {
+                break;
+            }
+        }
+    }
 
     auto& sout = c1.get("out").sock;
     auto& sin = c2.get("in").sock;
@@ -66,8 +75,8 @@ void test_two(yamz::Client::Mode mode)
 
 int main()
 {
-    // test_one(yamz::Client::Mode::direct);
-    // test_two(yamz::Client::Mode::direct);
-    // test_one(yamz::Client::Mode::selfserve);
+    test_one(yamz::Client::Mode::direct);
+    test_two(yamz::Client::Mode::direct);
+    test_one(yamz::Client::Mode::selfserve);
     test_two(yamz::Client::Mode::selfserve);
 }

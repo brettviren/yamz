@@ -160,8 +160,11 @@ yamz::Client::Mode yamz::Client::initialize()
         m_mode = Mode::selfserve;
         m_cfg.servers.push_back("inproc://" + m_cfg.clientid + "-selfserv");
         yamz::ServerConfig scfg{m_cfg.clientid, m_cfg.servers};
+        scfg.expected.push_back(m_cfg.clientid); // just us
         m_server = std::make_unique<yamz::Server>(m_ctx, scfg);
         m_server->start();
+        // // we are sole client, go online already
+        // m_server->online();
     }
     else {
         // external / app-level server mode
