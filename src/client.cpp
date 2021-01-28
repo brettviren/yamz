@@ -156,26 +156,25 @@ yamz::Client::Mode yamz::Client::initialize()
             return m_mode;
         }
 
-        // self-serve mode
+        // self-serve mode, start our server
         m_mode = Mode::selfserve;
-        m_clisock = zmq::socket_t(m_ctx, zmq::socket_type::client);
-        yamz::ServerConfig scfg{m_cfg.clientid,
-                                {"inproc://" + m_cfg.clientid + "-selfserv"}};
+        m_cfg.servers.push_back("inproc://" + m_cfg.clientid + "-selfserv");
+        yamz::ServerConfig scfg{m_cfg.clientid, m_cfg.servers};
         m_server = std::make_unique<yamz::Server>(m_ctx, scfg);
         m_server->start();
     }
     else {
         // external / app-level server mode
         m_mode = Mode::extserver;
-        m_clisock = zmq::socket_t(m_ctx, zmq::socket_type::client);
-
-        for (const auto& addr : m_cfg.servers) {
-            chirp(m_cfg, "connect to server at " << addr);
-            m_clisock.connect(addr);
-        }
     }
+    
+    // both selfserve and extserver talk to the server identically
 
-    // both selfserve and extserver talk to the server
+    m_clisock = zmq::socket_t(m_ctx, zmq::socket_type::client);
+    for (const auto& addr : m_cfg.servers) {
+        chirp(m_cfg, "connect to server at " << addr);
+        m_clisock.connect(addr);
+    }
 
     yamz::data_t obj = m_cfg;
     zmq::message_t msg(obj.dump());

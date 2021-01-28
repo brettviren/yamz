@@ -36,7 +36,7 @@ void yamz::Server::start()
     if (! res) {
         throw yamz::server_error("Failed to get server actor ready");
     }
-    std::cerr << "server: actor started" << std::endl;
+    std::cerr << "server actor: started" << std::endl;
 }
 
 bool yamz::Server::online()
