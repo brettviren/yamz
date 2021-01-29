@@ -69,7 +69,7 @@ yamz::server::Logic::Logic(zmq::context_t& ctx, const yamz::ServerConfig& cfg,
     // Link to zyre, but we don't start yet
     zyre.set_portnum(cfg.portnum);
     // fixme: make configurable
-    zyre.set_verbose();
+    // zyre.set_verbose();
 
     // notify API it can continue
     std::cerr << "server actor: sending ready" << std::endl;

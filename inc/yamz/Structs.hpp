@@ -316,7 +316,7 @@ namespace yamz {
         // @brief Any node-level identity patterns
         IdentityPatterns idpatts = {};
 
-        // @brief A set of peer nodes to expect to discover
+        // @brief The set of client IDs we expect to connect
         Idents expected = {};
     };
 
