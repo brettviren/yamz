@@ -7,4 +7,4 @@ Description: Network discovery with you and me, Zyre.
 Version: @VERSION@
 Libs: -L${libdir} @LLIBS@
 Cflags: -I${includedir}
-Requires: @REQUIRES@
+Requires: @PCREQUIRES@
