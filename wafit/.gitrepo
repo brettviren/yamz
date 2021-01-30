@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
+;
+[subrepo]
+	remote = git@github.com:brettviren/wafit.git
+	branch = master
+	commit = db8eda86da53ea2be8ccd9e142910f539c2fc73a
+	parent = 8de16bbb0374bd9f8110b6d0aafca31ab38fbdfe
+	method = merge
+	cmdver = 0.4.1
