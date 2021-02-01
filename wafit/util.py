@@ -5,14 +5,31 @@ def listify(lst, delim=' '):
         return lst.split(delim)
     return list(lst)
 
+def keys_of_type(env, typ):
+    keys = set()
+    for hh in env:
+        if hh.startswith(typ.upper() + "_"):
+            h = hh.split("_",1)
+            if h[1] == "ST":
+                continue
+            keys.add(h[1])
+    keys = list(keys)
+    keys.sort()
+    return keys
+
 def uses(ctx):
-    return [hh.split("_",1)[1] for hh in ctx.env if hh.startswith("HAVE_")]
+    uses = keys_of_type(ctx.env, "INCLUDES")
+    uses += keys_of_type(ctx.env, "LIBPATH")
+    uses = list(uses)
+    uses.sort()
+    return uses
 
 def rpath(ctx):
-    use = uses(ctx)
-    rpath = [ctx.env["PREFIX"] + '/lib']
-    rpath += [ctx.env["LIBPATH_%s"%u][0] for u in use if ctx.env["LIBPATH_%s"%u]]
-    return list(set(rpath))
+    paths = keys_of_type(ctx.env, "LIBPATH")
+    paths.append(ctx.env["PREFIX"] + '/lib')
+    paths = list(set(paths))
+    paths.sort()
+    return paths
     
 
 def generic_options(opt, name, libs=True, incs=True):
@@ -51,20 +68,18 @@ def generic_configure_incs(cfg, name, incs, deps=[]):
                     incpath.append(adir)
 
     setattr(cfg.env, f'INCLUDES_{upper}', incpath)
-
     cfg.start_msg(f"Checking for {name} headers")
     for header in incs:
         cfg.check(features='cxx cxxprogram',
-                  define_name=f'HAVE_{upper}',
                   header_name=header,
                   use=[upper] + deps, uselib_store=upper)
-    have_incs = getattr(cfg.env, f'INCLUDES_{upper}', None)
-    cfg.end_msg(str(have_incs))
+    cfg.end_msg(cfg.env[f'INCLUDES_{upper}'])
 
-def generic_configure_libs(cfg, name, libs, deps=[]):
+def generic_configure_libs(cfg, name, libs, deps=()):
     lunder = name.lower()
     ldash = lunder.replace("_", "-")
     upper = name.upper().replace("-", "_")
+    deps = listify(deps)
 
     if isinstance(libs, str):
         libs = [libs]
@@ -91,10 +106,9 @@ def generic_configure_libs(cfg, name, libs, deps=[]):
                     libpath.append(adir)
 
     setattr(cfg.env, f'LIBPATH_{upper}', libpath)
-
     cfg.start_msg(f'Checking for {name} libs')
     for tryl in libs:
-        cfg.check_cxx(lib=tryl, define_name=f'HAVE_{upper}_LIB',
-                      use=[upper] + deps, uselib_store=upper)
-    cfg.end_msg(str(getattr(cfg.env, f'LIBPATH_{upper}', None)))
-
+        cfg.check_cxx(lib=tryl,
+                      use=[upper] + deps,
+                      uselib_store=upper)
+    cfg.end_msg(cfg.env[f'LIBPATH_{upper}'])

@@ -9,4 +9,3 @@ def options(opt):
 
 def configure(cfg):
     util.generic_configure_incs(cfg, "sml", ["boost/sml.hpp"])
-

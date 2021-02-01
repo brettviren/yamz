@@ -1,6 +1,6 @@
 #!/usr/bin/env waf
 from wafit import WafIT, util
-proj = WafIT("compiler_cxx render unit_test moo sml nljs cppzmq zyre")
+proj = WafIT("compiler_cxx render unit_test moo sml nljs cppzmq libzyre")
 
 VERSION="0.0.0"
 APPNAME="yamz"
@@ -8,10 +8,20 @@ DESCRIPTION="Network discovery with you and me, Zyre"
 
 # def options(opt):
 #     opt.load("does-not-exist")
-options = proj.options
+def options(opt):
+    proj.options(opt)
+
 def configure(cfg):
-    proj.configure(cfg)
     cfg.env.CXXFLAGS += ['-std=c++17', '-ggdb3', '-Wall', '-Werror']
+    proj.configure(cfg)
+    print(cfg.env)
+    for inc in "sml nljs cppzmq libzmq libczmq libzyre".split():
+        upper=inc.upper()
+        assert(cfg.env[f"INCLUDES_{upper}"])
+
+    for lib in "libzmq libczmq libzyre pthread".split():
+        upper=lib.upper()
+        assert(cfg.env[f"LIBPATH_{upper}"])
 
 from waflib.Utils import subst_vars
 from subprocess import check_output
