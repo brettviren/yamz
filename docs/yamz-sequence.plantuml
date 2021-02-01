@@ -58,11 +58,11 @@ ysB <-> ysA : Zyre ENTER ysB/ysA
 ysA --> yc1 : msg:reply(ysB connects)\nqueue
 ysA --> yc2 : msg:reply(ysB connects)\nqueue
 & app -> app : work
-app -> yc1 : discover()
+app -> yc1 : poll()
 & yc1 -> yc1 : connect(ysB)                
 
 app -> app : work
-app -> yc1 : discover()
+app -> yc1 : poll()
 & yc1 -> yc1 : noop                        
 
 & ysC -> ysC : online
@@ -79,7 +79,7 @@ ysA --> yc1 : msg:reply(ysB disconnects)\nqueue
 ysA --> yc2 : msg:reply(ysB disconnects)\nqueue
 
 & app -> app : work
-app -> yc2 : discover()
+app -> yc2 : poll()
 & yc2 -> yc2 : connect(ysB)
 yc2 -> yc2 : connect(ysC)
 yc2 -> yc2 : disconnect(ysB)

@@ -1,255 +1,80 @@
-#+title: You and me, zyre. 🍠
+#+title: You and me, Zyre. 🍠
 
-* Problem
+/yamz/ provides flexible mechanisms to manage sockets within and
+automatically form linkages between sockets of advanced,
+multi-threaded applications.
 
-It is hard to find friends and maintain a healthy work environment.
+* Gestalt
 
-I am a program with sockets.  Some will bind, some will connect, and
-some might even do both.  I am fond of my sockets and give them names
-so I will know them and know what I will do with them.  I do not
-really care about what my sockets bind or connect.  I trust them and
-the user to do what is right.  I like sockets because I can send and
-recv and the rest of the details just are not important to me.  
+/yamz/ 
 
-I think you and many others are just like me.  We should meet and
-maybe hold hands if we are compatible.  How can I find you?  How will
-I know when you are around?  How do I know which of your sockets and
-you know which of my sockets can link up?  We should say hi and tell
-the world about our sockets and then we can each decide to be friends
-or go our own way.
+- provides ready-to-use socket configuration mechanism while still
+  allowing application-determined configuration.
 
-Besides wanting to link up with others, I do a lot of things all by
-myself.  I am sure you do too.  I especially like having some of my
-sockets be used in one thread and other sockets used in another.  I
-know sockets do not like crossing threads so it is hard for me to be
-able to put them all together so I can tell you about them.  
+- allows disparate, possibly dynamically-loaded components to present
+  a unified advertisement of socket configuration to a discovery
+  network (currently Zyre but extension to others is possible).
 
-I am also a little bit of a scatter brain.  My user tells me to run
-code that I barely know.  My user calls this code "plugins" or
-"modules" or "components".  That sounds good to me so I am okay with
-it.  But I do not always know all my sockets.
+- provides a simple and general abstract address query mechanism to
+  find appropriate peer sockets to connect.
 
-So, how can you and me work something out and build a beautiful
-friendship?
+- allows socket using code to be notified when interesting peers
+  become seen on or leave the discovery network.
 
-* Solution
+* Architecture
 
-You and me, Zyre (yamz) targets C++ applications using [[https://github.com/zeromq/cppzmq][cppzmq]].  It
-sets up a little /in-process/ ZeroMQ network.  The network is centered
-on a "server" which coordinate access to Zyre, the ZeroMQ
-decentralized peer discovery mechanism.
+/yamz/ is used by an application through one or more instances of the
+/yamz/ client.  Through the /yamz/ client, the application may construct a
+number of ZeroMQ sockets.  The sockets are held by the client and the
+application may use them via a thin handler called a /port/.
 
-Then, any number of yamz "clients" may connect to the yamz server over
-the /in-process/ network.  The yamz client will take care of the details
-of creating and configuring a number of sockets according to
-user-provided configuration.  All addresses that clients shall ~bind()~
-are reported to the server and collectively this forms a message
-published to the Zyre discovery network.  
+The /yamz/ client may operate in three /modes/:
 
-The Zyre message includes an overall name for the process (the "node"
-ID), and ID names for each client of the node and for each port of the
-client.  At these three levels and at the level of individual port
-addresses the message includes associated key/value parameters.
+- direct :: standard ZeroMQ addresses may be used and network
+  discovery is not engaged.
+- selfserv :: the client creates its own /yamz/ server.
+- extserver :: the client relies on an existing /yamz/ server possibly
+  shared by other /yamz/ clients.
 
-In this way, peers on the network see the ~bind()~ addresses and their
-identity information and may decide which sockets are suitable to
-~connect()~.  And, this brings in the second service provided to the
-yamz clients by the yamz server.  The clients may request /abstract
-address resolution/ by specifying addresses as /identity patterns/ to be
-matched against the published /identity parameters/.  As matches appear
-on the Zyre network, the server will reply to the client with concrete
-~bind()~ address of the peer to which the client may then have the
-appropriate socket ~connect()~.  All without the application having to
-life a finger.
+The /yamz/ server provides a /discovery entity/ (eg a Zyre "node" or
+"peer") and mediates between the discovery mechanism and its clients.
+A client will make a single request of its server and the server will
+asynchronously send replies to its clients as network conditions
+determine.
 
-* Example
+* Discovery
 
-A yamz application will make one ~yamz::Server~, typically in ~main()~ or
-other central code and some number of ~yamz::Client~ instances.
+The Zyre network is currently the only discovery mechanism that /yamz/
+supports.  In principle, an alternative /yamz/ server may be developed
+which participates in another discovery mechanism and /yamz/ clients
+need not change.
 
-** Server
+An example /yamz/ discovery sequence shown in
+[[file:docs/yamz-sequence.pdf]].  Briefly:
 
-The ~yamz::Server~ provides a fully *synchronous* API around an
-*asynchronous* thread function (/actor pattern/).  The body of that
-function handles all communication between API, Zyre and the
-in-process clients.  In principle, an application may make multiple
-servers and each will appear as a unique Zyre node.
+1. application (~extserver~ mode) or client (~selfserve~ mode) constructs /yamz/ server
+2. application constructs /yamz/ client
+3. client receives /bind/ and /connect/ addresses via configuration or explicit application calls
+4. all /bind/ calls are performed and ephemeral /bind/ addresses are resolved
+5. clients make their individual request consisting of /bind/ addresses and /connect/ addresses (abstract for matching or concrete)
+6. server is explicitly brought "online" by application or through an automatic online criteria being met (all expected clients connected)
+7. server enters the discovery network with information about its /bind/ addresses
+8. the /yamz/ server receives notice from another /yamz/ server peer and matches its /connect/ patterns to the peers /bind/ addresses
+9. matched addresses are sent as reply to appropriate /yamz/ client
+10. application will periodically /poll/ its client(s)
+11. in a /poll/ the /yamz/ client will process any queued replies and apply any /connect/ address to the appropriate socket
 
-Using it the server in code is very easy.  Somewhere near your ~main()~
-you would have code like:
+Throughout this process the application may decide to wait for
+expected linkage or if applicable, simply begin using its sockets as
+they will become linked automatically by the /yamz/ client.
 
-#+begin_src c++
-    zmq::context_t ctx;
-    yamz::ServerConfig cfg = ...;
-    yamz::Server server(ctx, cfg);
-    server.start();
-#+end_src
+* Address matching
 
-The same ZeroMQ context given to the server must be used by the
-~yamz::Client~ instances if they will talk over ~inproc://~.  If that can
-not be arranged, other transport may be used.
-
-After constructing the server, your program can mostly ignore it other
-than to make sure it stays in scope.  When the server instance is
-destroyed, the peers on the Zyre network and the in-process clients
-will be notified.
-
-** Client
-
-An application component/module/plugin/thread may create a
-~yamz::Client~ to manage its sockets.
-
-#+begin_src c++
-  void my_thread_func(zmq::context_t& ctx, ClientConfig cfg)
-  {
-      // The configuration fully determines what sockets we have.
-      // We must only agree on the socket ("port") names.
-      yamz::Client cli(ctx, cfg);
-
-      // Make a request to the server with the bind() addresses made by
-      // the client and with any connect() address resolutions. 
-      cli.discover(std::chrono::milliseconds{1000});
-
-      auto& port1 = cli.get("port1");
-      while (true) {
-          std::string msg = "I AM NOT YELLING, YOU ARE YELLING";
-          port1.send(zmq::message_t{msg}, zmq::send_flags::none);
-      }
-  }
-#+end_src
-
-Here, the name of this (rather silly) function hints that it runs in a
-~std::thread~.  It is possible to construct the ~yamz::Client~ in one
-another thread but the application must take care to keep all calls to
-~.discover()~ in the same thread that the sockets will be used (eg,
-after accessing them by reference via a call to ~.get()~).  This care is
-needed to assure ZeroMQ socket thread safety and the yamz client is
-specially design to restrict socket access internally to the
-~.discover()~ method.
-
-This example shows the main ~yamz::Client~ features and if the
-application does not require to synchronize with peers as they are
-discovered, it may be enough.  
-
-Typically, however, the application may want to "wait" in some way for
-at least one peer to show up that it should ~connect()~.  Or, it may
-have a more complex criteria to transition from some "initialization"
-state to an "operational" one.
-
-There are two ways to do this waiting.  The first is to simply sit in
-a loop calling ~.discover()~.
-
-#+begin_src c++
-  while (true) {
-      auto what = cli.discover();
-      if (what == yamz::ClientAction::terminate) {
-          std::cerr << "server terminated, I will to\n";
-          return;
-      }
-      if (what == yamz::ClientAction::connect) {
-          std::cerr << "I got one connect, time to get to work\n";    
-          break;
-      }
-      std::this_thread::sleep_for(std::chrono::milliseconds{1000});
-  }
-#+end_src
-
-The call to sleep is not great as it hangs up the client, but it may
-be acceptable to the developer.  A more reactive pattern can be
-created by getting the client socket in order to incorporate it into a
-poller possibly along with other application sockets provided by the
-client.  Here is an example of an application function that waits for
-one of its sockets to make at least one connection.
-
-#+begin_src c++
-  auto& port1 = cli.get("port1");
-  auto& sock1 = port1.sock;
-  auto& csock = cli.socket();
-
-  zmq::poller_t<> poller;
-  poller.add(sock1, zmq::event_flags::pollin);
-  poller.add(csock, zmq::event_flags::pollin);
-  std::vector<zmq::poller_event<>> events(2);
-  while (true) {
-      const int nevents = poller.wait_all(events, timeout);
-
-      if (!nevents and !port1.conns.empty()) {
-          do_some_idle_task();
-          continue;
-      }
-
-      for (int iev = 0; iev < nevents; ++iev) {
-
-          if (events[iev].socket == csock) { // service client
-              auto what = cli.discover();
-              if (what == yamz::ClientAction::terminate) {
-                  std::cerr << "server terminated, I will too.\n";
-                  return;
-              }
-
-              if (events[iev].socket == sock1) {
-                  std::cerr << "I got something on my app socket!\n"
-                  handle_socket(sock1);
-              }
-          }
-      }
-  }
-#+end_src
-
-This is a connection-oriented policy.  In the future, yamz may provide
-notification for when a peer connects to a client's ~bind()~ address.
-
-** Application
-
-A full application is provided in [[file:test/test_yamz_cluster.cpp]] and
-where we describe how to run it.
-
-But first, we must also introduce the fact that most yamz objects are
-powered by [[https://brettviren.github.io/moo][moo schema]].  The types that make up client and server
-protocol, the object provided by the ~YAMZ~ Zyre header and teh client
-and server configuration objects are all described in moo schema in
-the file [[file:src/yamz-schema.jsonnet]].  
-
-Also included in the yamz schema the message types exchanged by the
-~test_yamz_cluster~ application and the configuration objects that the
-application consumes on the command line.  For these latter one can
-generate configuration like:
-
-#+begin_example
-  $ python3 test/test_yamz_cluster.py nodeA 2 > nodeA.json
-  $ python3 test/test_yamz_cluster.py nodeB 3 > nodeB.json
-#+end_example
-
-This configure one instance of the test application to have a node
-name ~nodeA~ with 2 clients and another ~nodeB~ with 3 clients.  We may
-run these two application in their own terminal simply like:
-
-#+begin_example
-  $ ./build/test_yamz_cluster nodeA.json
-#+end_example
-
-Etc for any others.  The test application do not have any
-sophisticated process control so simply Ctrl-C to kill them.  
-
-Each client of each node of this test app will ~bind()~ one socket which
-will be published to Zyre.  It will then request its server to resolve
-the addresses all peers for ~connect()~ by a second socket.  Between
-each client's pair of sockets one then forms a fully-connected network.  
-
-Each client will then start requesting the system time of its peers
-and calculating the latency to get a response all the while responding
-to these requests from others.
+~yamz://~ explained
 
 
-* Todo
+* Installation
 
-yamz is at a "minimum viable" level.  Some items still under consideration:
+* Example code
 
-- [ ] integration (via an adapter package) with DUNE DAQ.
-
-- [ ] publishing ~connect()~ resolutions to a Zyre group, and a Zyre whisper based query to retrieve server state.
-
-- [ ] a demo of a Zyre app that collects both YAMZ header ~bind()~ and published ~connect()~ resolutions to illustrate monitoring and visualization of the full graph of links.
-
-
-
+  
