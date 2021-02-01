@@ -2,8 +2,8 @@ prefix=@prefix@
 libdir=@libdir@
 includedir=${prefix}/include
 
-Name: yamz
-Description: Network discovery with you and me, Zyre.
+Name: @APPNAME@
+Description: @DESCRIPTION@
 Version: @VERSION@
 Libs: -L${libdir} @LLIBS@
 Cflags: -I${includedir}
