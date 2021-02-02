@@ -138,6 +138,7 @@ void Logic::match_address(MatchAddress& ma, yamz::ClientAction ca)
         throw yamz::server_error("internal error uknown client: " + ma.clid);
     }
     for (const auto& it : them) {
+        chirp(cfg, "match " << it.second.znick);
         for (const auto& ra : it.second.ras) {
             chirp(cfg, "try match for " << str(ma) << " = " << ra.address);
             if (! (ma.nodeid == "*" or ma.nodeid == ra.nodeid)) {
@@ -153,6 +154,7 @@ void Logic::match_address(MatchAddress& ma, yamz::ClientAction ca)
                 break;
             }
             // a winner
+            chirp(cfg, "match " << ma.clportid << " to " << ra.address);
             ci->tosend.emplace_back(ClientReply{ca, ma.clportid, ra.address});
         }
     }
@@ -162,13 +164,12 @@ void yamz::server::Logic::do_matching(yamz::ClientAction ca)
 {
     // iterate clients to drain tomatch by comparing against them and
     // filling tosend
+    chirp(cfg, "do matching " << str(ca));
     for (auto& ci : clients.infos) {
         for (auto& ma : ci.tomatch) {
             match_address(ma, ca);
         }
     }
-
-    notify_clients();
 }
 void yamz::server::Logic::notify_clients() 
 {
@@ -178,8 +179,10 @@ void yamz::server::Logic::notify_clients()
     for (auto& ci : clients.infos) {
         for (const auto& rep : ci.tosend) {
             yamz::data_t jobj = rep;
-            zmq::message_t msg(jobj.dump());
+            const std::string text = jobj.dump();
+            zmq::message_t msg(text);
             msg.set_routing_id(ci.remid);
+            chirp(cfg, "notify " << ci.nick << ": " << text);
             auto res = sock.send(msg, zmq::send_flags::none);
             if (!res) {
                 throw server_error("failed to reply to client " + ci.nick);
@@ -200,6 +203,12 @@ void yamz::server::Logic::go_online()
     zyre_online = true;
     chirp(cfg, "go online with:\n" << jobj.dump());
     std::string rep = gotem ? "OKAY" : "FAIL";
+
+    auto myuuid = zyre.uuid();
+    PeerInfo pi{myuuid, zyre.nick(), server_clock::now()};
+    fill_peer(us, pi);
+    them[myuuid] = pi;
+
     zmq::message_t msg{rep};
     auto res = link.send(msg, zmq::send_flags::none);
     if (!res) {
@@ -236,10 +245,16 @@ void yamz::server::Logic::do_terminate()
         chirp(cfg, "termiating client: " << ci.nick);
         zmq::message_t msg(sdat);
         msg.set_routing_id(ci.remid);
-        auto res = sock.send(msg, zmq::send_flags::none);
-        if (!res) {
-            chirp(cfg, "failed to send terminate to " << ci.nick);
+        try {
+            auto res = sock.send(msg, zmq::send_flags::dontwait);
+            if (!res) {
+                chirp(cfg, "failed to send terminate to " << ci.nick);
+            }
         }
+        catch (zmq::error_t& err) {
+            chirp(cfg, "ignoring error from " << ci.nick << ": " << err.what());
+        }
+
     }
     
 }
@@ -250,27 +265,11 @@ void yamz::server::Logic::store_request()
     yamz::ClientConfig cc;
     auto remid = yamz::server::recv_type(sock, cc);
     accept_client(remid, cc);
-
-    // newly added clients may already have won!
-    do_matching(yamz::ClientAction::connect);
 }
 
-void yamz::server::Logic::add_peer(const yamz::ZyreEvent& zev) 
+
+void yamz::server::Logic::fill_peer(yamz::YamzPeer& yp, PeerInfo& pi)
 {
-    
-    auto znick = zev.peer_name();
-    auto zuuid = zev.peer_uuid();
-    auto zaddr = zev.peer_addr();
-
-    chirp(cfg, "add peer: " << znick);
-
-    auto text = zev.header("YAMZ");
-    auto jobj = yamz::data_t::parse(text);
-
-    auto yp = jobj.get<yamz::YamzPeer>();
-
-    PeerInfo pi{zuuid, znick, zaddr, server_clock::now()};
-
     for (const auto& client : yp.clients) {
         auto client_parms = append(yp.idparms, client.idparms);
         for (const auto& port : client.ports) {
@@ -282,7 +281,7 @@ void yamz::server::Logic::add_peer(const yamz::ZyreEvent& zev)
                     addr_parms[key].insert(val);
                 }
                 auto just_addr = yamz::str(uri, false);
-                RemoteAddress ra{znick, client.clientid, port.portid,
+                RemoteAddress ra{pi.znick, client.clientid, port.portid,
                     addr_parms, just_addr, port.ztype};
                 pi.ras.emplace_back(std::move(ra));
                 chirp(cfg, "add peer: " << client.clientid << "/"
@@ -290,9 +289,23 @@ void yamz::server::Logic::add_peer(const yamz::ZyreEvent& zev)
             }
         }
     }
-    them[zuuid] = pi;
+}
 
-    do_matching(yamz::ClientAction::connect);
+void yamz::server::Logic::add_peer(const yamz::ZyreEvent& zev) 
+{
+    
+    auto znick = zev.peer_name();
+    auto zuuid = zev.peer_uuid();
+
+    chirp(cfg, "add peer: " << znick);
+
+    auto text = zev.header("YAMZ");
+    auto jobj = yamz::data_t::parse(text);
+    auto yp = jobj.get<yamz::YamzPeer>();
+
+    PeerInfo pi{zuuid, znick, server_clock::now()};
+    fill_peer(yp, pi);
+    them[zuuid] = pi;
 }
 void yamz::server::Logic::del_peer(const yamz::ZyreEvent& zev) 
 {
@@ -304,7 +317,6 @@ void yamz::server::Logic::del_peer(const yamz::ZyreEvent& zev)
         return;                 
     }
     them.erase(it);
-    do_matching(yamz::ClientAction::disconnect);
 }
 bool yamz::server::Logic::have_clients()
 {

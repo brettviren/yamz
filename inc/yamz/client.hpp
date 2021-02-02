@@ -133,8 +133,15 @@ namespace yamz {
          *
          */
         enum class Mode { uninitialized=0, direct, selfserve, extserver };
-        Mode mode() const { return m_mode; }
         Mode initialize();
+
+        /** Access the mode.  
+         *
+         * This will "uninitialized" prior to call of initialize()
+         * after which it will be and remain one of the other allowed
+         * values for Mode.
+         */
+        Mode mode() const { return m_mode; }
 
         /** Poll for, recv and process at most one reply from server.
          *  

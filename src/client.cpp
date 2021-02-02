@@ -84,9 +84,6 @@ void yamz::Client::connect(std::string portid, std::string addr)
     auto& pi = get(portid);
     auto& portcfg = m_cfg.ports.at(pi.ccpind);
     portcfg.conns.push_back(addr);
-    // fixme: want to add some kind of short circuit for concrete
-    // connect addresses for when the client is configured with no
-    // server.  Ie, to operate in "direct" mode.
 }
 
 
@@ -112,7 +109,7 @@ void yamz::Client::bind(std::string portid, std::string addr)
     addr = yamz::str(uri, false); // no params
     pi.sock.bind(addr);           // may throw
     auto conc = pi.sock.get(zmq::sockopt::last_endpoint);
-    chirp(m_cfg, "bind " << orig << " -> " << addr << " -> " << conc);
+    chirp(m_cfg, "bind port " << portid << " to " << orig << " -> " << addr << " -> " << conc);
     portcfg.binds.push_back(conc);
     pi.binds.push_back(conc);
 }
@@ -150,7 +147,7 @@ yamz::Client::Mode yamz::Client::initialize()
                     auto& pi = m_portinfos[portcfg.portid];
                     pi.sock.connect(addr);
                     pi.conns.push_back(addr);
-                    chirp(m_cfg, portcfg.portid << " connected to: " << addr);
+                    chirp(m_cfg, "connect port " << portcfg.portid << " to " << addr);
                 }
             }
             return m_mode;
@@ -219,6 +216,11 @@ yamz::ClientAction yamz::Client::poll(std::chrono::milliseconds timeout)
 
     chirp(m_cfg, "reply: " << jobj.dump());
 
+    if (m_last_reply.action == yamz::ClientAction::terminate) {
+        chirp(m_cfg, "server says terminate: ");
+        return m_last_reply.action;
+    }
+
     auto it = m_portinfos.find(m_last_reply.portid);
     if (it == m_portinfos.end()) {
         throw yamz::client_error("yamz server gave unknown port: "
@@ -226,19 +228,16 @@ yamz::ClientAction yamz::Client::poll(std::chrono::milliseconds timeout)
     }
     PortInfo& pi = it->second;
     if (m_last_reply.action == yamz::ClientAction::connect) {
-        pi.sock.connect(m_last_reply.address);
-        pi.conns.push_back(m_last_reply.address);
-        chirp(m_cfg, "connected to: " << m_last_reply.address);
+        const auto addr = m_last_reply.address;
+        pi.sock.connect(addr);
+        pi.conns.push_back(addr);
+        chirp(m_cfg, "connect port " << pi.name << " to " << addr);
         return m_last_reply.action;
     }
     if (m_last_reply.action == yamz::ClientAction::disconnect) {
         pi.sock.disconnect(m_last_reply.address);
         // fixme: remove from conns
-        chirp(m_cfg, "disconnected from: " << m_last_reply.address);
-        return m_last_reply.action;
-    }
-    if (m_last_reply.action == yamz::ClientAction::terminate) {
-        chirp(m_cfg, "server says terminate: ");
+        chirp(m_cfg, "disconnect port " << pi.name << " from " << m_last_reply.address);
         return m_last_reply.action;
     }
     throw yamz::client_error("yamz server gave unknown reply");

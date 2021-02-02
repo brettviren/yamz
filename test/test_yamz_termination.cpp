@@ -32,7 +32,7 @@ void test_cdt(int scenario) {
     auto outaddr = outpi.binds[0];
 
     client2->add_server(scfg.addresses[0]);
-    client2->make_port("in", ZMQ_PUSH);
+    client2->make_port("in", ZMQ_PULL);
     client2->connect("in", "yamz://*/client1/out");
     auto m2 = client2->initialize();
     assert(m2 == yamz::Client::Mode::extserver);
@@ -40,17 +40,22 @@ void test_cdt(int scenario) {
 
     // server should be online now and clients ready for polling.
 
-    std::chrono::milliseconds delay(10);
+    std::chrono::milliseconds delay(100);
     yamz::ClientAction ca;
 
+    std::cerr << "polling client1\n";
     ca = client1->poll(delay);
     assert(ca == yamz::ClientAction::timeout); // no reply expected
 
+    std::cerr << "polling client2\n";
     ca = client2->poll(delay);
     assert(ca == yamz::ClientAction::connect);
     auto lr = client2->last_reply();
     assert(lr.action == yamz::ClientAction::connect);
-    assert(lr.portid == "client2");
+    std::cerr << "last reply: portid=" << lr.portid
+              << " address:" << lr.address
+              << "\n";
+    assert(lr.portid == "in");
     assert(lr.address == outaddr);
     assert(inpi.binds.empty());
     assert(inpi.conns.size() == 1);
@@ -73,24 +78,34 @@ void test_cdt(int scenario) {
     auto rres = sin.recv(msg, zmq::recv_flags::none);
     assert ( rres );
     assert ( str == msg.to_string() );
-
+    std::cerr << "got \"" <<  str << "\"\n";
 
     // finally we can kill things off.
 
     if (scenario == 1) {         // murder server
+        std::cerr << "murder server\n";
         delete server;
+        std::cerr << "poll client1\n";
         ca = client1->poll(delay);
         assert(ca == yamz::ClientAction::terminate);
+        std::cerr << "poll client2\n";
         ca = client2->poll(delay);
         assert(ca == yamz::ClientAction::terminate);
+        std::cerr << "murder client1\n";
         delete client1;
+        std::cerr << "murder client2\n";
         delete client2;
     }
     if (scenario == 2) {        // murder client
+        std::cerr << "murder client1\n";
         delete client1;
+        std::cerr << "poll client2\n";
         ca = client2->poll(delay);
-        assert(ca == yamz::ClientAction::disconnect);
+        std::cerr << "got: " << yamz::str(ca) << "\n";        
+        assert(ca == yamz::ClientAction::timeout);
+        std::cerr << "murder client2\n";
         delete client2;
+        std::cerr << "murder server\n";
         delete server;
     }
 
@@ -98,5 +113,6 @@ void test_cdt(int scenario) {
 int main()
 {
     test_cdt(1);
+    test_cdt(2);
     return 0;
 }

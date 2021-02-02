@@ -123,6 +123,14 @@ namespace yamz {
             zyre_set_port(_peer, _portnum);
         }
 
+        std::string uuid() {
+            return zyre_uuid(_peer);
+        }
+
+        std::string nick() {
+            return zyre_name(_peer);
+        }
+
         // Get underlying zyre socket if online
         zmq::socket_ref socket() {
             if (!_peer) { return nullptr; }

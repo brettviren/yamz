@@ -50,7 +50,7 @@ namespace yamz::server {
     struct PeerInfo {
         std::string zuuid;   // zyre id
         std::string znick;   // zyre node/nick name
-        std::string zaddr;   // zyre address
+        // std::string zaddr;   // zyre address
         using time_point = std::chrono::time_point<server_clock>;
         time_point seen;    // when we saw the peer ENTER or EXIT
         std::vector<RemoteAddress> ras;
@@ -112,13 +112,12 @@ namespace yamz::server {
         void add_peer(const yamz::ZyreEvent& zev);
         void del_peer(const yamz::ZyreEvent& zev);
         void notify_clients();
+        void do_matching(yamz::ClientAction ca);
 
         // low level access
         yamz::ZyreEvent recv_zyre();
         std::string recv_link();
 
-        // Internal "actions" called by actions
-        void do_matching(yamz::ClientAction ca);
 
         // Accept a message from a client
         void accept_client(remid_t remid, const yamz::ClientConfig& cc);
@@ -140,6 +139,7 @@ namespace yamz::server {
         // maybe: any reason to remember the goners?
         Clients clients;
 
+        void fill_peer(yamz::YamzPeer& yp, PeerInfo& pi);
         
 
     };

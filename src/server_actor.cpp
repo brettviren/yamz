@@ -42,6 +42,8 @@ namespace {
     const auto go_online = [](yamz::server::Logic& guts) {
         chirp("fsm: go online");
         guts.go_online();
+        guts.do_matching(yamz::ClientAction::connect);
+        guts.notify_clients();
     };
     const auto go_offline = [](yamz::server::Logic& guts) {
         chirp("fsm: go offline");
@@ -54,14 +56,20 @@ namespace {
     const auto store_request = [](yamz::server::Logic& guts) {
         chirp("fsm: store request");
         guts.store_request();
+        guts.do_matching(yamz::ClientAction::connect);
+        guts.notify_clients();
     };
     const auto add_peer = [](yamz::server::Logic& guts, const PeerEnter& pe) {
         chirp("fsm: add peer");
         guts.add_peer(pe.zev);
+        guts.do_matching(yamz::ClientAction::connect);
+        guts.notify_clients();
     };
     const auto del_peer = [](yamz::server::Logic& guts, const PeerExit& pe) {
         chirp("fsm: del peer");
         guts.del_peer(pe.zev);
+        guts.do_matching(yamz::ClientAction::disconnect);
+        guts.notify_clients();
     };
     const auto notify_clients = [](yamz::server::Logic& guts) {
         chirp("fsm: notify clients");
