@@ -43,6 +43,9 @@ namespace yamz {
         Server(zmq::context_t& ctx, const ServerConfig& cfg = {});
         ~Server();
         
+        Server(const Server&) = delete;
+        Server operator=(const Server&) = delete;
+
         /** Replace server configuration. */
         void configure(const ServerConfig& cfg);
 

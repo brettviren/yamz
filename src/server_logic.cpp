@@ -252,7 +252,7 @@ void yamz::server::Logic::do_terminate()
             }
         }
         catch (zmq::error_t& err) {
-            chirp(cfg, "ignoring error from " << ci.nick << ": " << err.what());
+            chirp(cfg, "ignoring error on send to " << ci.nick << ": " << err.what());
         }
 
     }

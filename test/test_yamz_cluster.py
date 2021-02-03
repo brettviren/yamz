@@ -37,6 +37,7 @@ sc = yamz.ServerConfig(nodeid=sys.argv[1],
 ccs = list()
 for cname in client_names:
     cc = yamz.ClientConfig(clientid=cname)
+    cc.servers = sc.addresses
     cc.ports = yamz.ClientPorts([
         yamz.ClientPort(portid="askme", ztype="SERVER",
                         binds=["tcp://*:*"]),

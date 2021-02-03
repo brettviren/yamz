@@ -158,6 +158,7 @@ yamz::Client::Mode yamz::Client::initialize()
         m_cfg.servers.push_back("inproc://" + m_cfg.clientid + "-selfserv");
         yamz::ServerConfig scfg{m_cfg.clientid, m_cfg.servers};
         scfg.expected.push_back(m_cfg.clientid); // just us
+        chirp(m_cfg, "makeing selfserv server");
         m_server = std::make_unique<yamz::Server>(m_ctx, scfg);
         m_server->start();
         // // we are sole client, go online already
@@ -235,9 +236,14 @@ yamz::ClientAction yamz::Client::poll(std::chrono::milliseconds timeout)
         return m_last_reply.action;
     }
     if (m_last_reply.action == yamz::ClientAction::disconnect) {
-        pi.sock.disconnect(m_last_reply.address);
-        // fixme: remove from conns
         chirp(m_cfg, "disconnect port " << pi.name << " from " << m_last_reply.address);
+        try {
+            pi.sock.disconnect(m_last_reply.address);
+        }
+        catch (zmq::error_t& err) {
+            chirp(m_cfg, "disconnect port " << pi.name << " ignore error: " << err.what());
+        }
+        // fixme: remove from conns
         return m_last_reply.action;
     }
     throw yamz::client_error("yamz server gave unknown reply");

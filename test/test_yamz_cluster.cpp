@@ -133,7 +133,7 @@ void cluster_component(zmq::context_t& ctx, ClientConfig cfg)
     poller.add(askyou, zmq::event_flags::pollin);
     poller.add(csock, zmq::event_flags::pollin);
     std::vector<zmq::poller_event<>> events(3);
-    std::chrono::milliseconds timeout{10000};
+    std::chrono::milliseconds timeout{1000};
 
     bool keep_going{true};
     while (keep_going) {
@@ -188,8 +188,11 @@ int main(int argc, char* argv[])
 
     zmq::context_t ctx;
 
+    std::cerr << "main: make server:\n";
     yamz::Server server(ctx, cfg.server);
+    std::cerr << "main: server at " << (void*)&server << "\n";
     server.start();
+    std::cerr << "main: start server\n";
 
     std::vector<std::thread> cthreads;
     for (auto& cc : cfg.clients) {

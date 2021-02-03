@@ -161,8 +161,8 @@ handle_zyre(FSM& fsm, yamz::server::Logic& guts)
 {
     auto zev = guts.recv_zyre();
 
-    chirp("zyre " << zev.type() << ": peer: "
-          << zev.peer_name() << " uuid:[" << zev.peer_uuid() << "]");
+    // chirp("zyre " << zev.type() << ": peer: "
+    //       << zev.peer_name() << " uuid:[" << zev.peer_uuid() << "]");
 
     if (zev.type() == "ENTER") {
         chirp("zyre ENTER: peer: "

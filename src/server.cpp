@@ -10,6 +10,8 @@ yamz::Server::Server(zmq::context_t& ctx,
                      const ServerConfig& cfg)
     : ctx{ctx}, cfg{cfg}
 {
+    std::cerr << "server: constructing: "
+              << (void*)this << std::endl;
 }
 
 void yamz::Server::start()
