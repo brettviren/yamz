@@ -75,6 +75,12 @@ they will become linked automatically by the /yamz/ client.
 
 * Installation
 
+** Development
+
+#+begin_example
+git subrepo push wafit
+#+end_example
+
 * Example code
 
   

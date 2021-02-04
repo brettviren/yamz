@@ -44,12 +44,13 @@ def generic_options(opt, name, libs=True, incs=True):
         opt.add_option(f'--with-{ldash}-lib', type='string', 
                        help=f'{name} lib location')    
 
-def generic_configure_incs(cfg, name, incs, deps=[]):
+def generic_configure_incs(cfg, name, incs, deps=()):
+    incs = listify(incs)
+    deps = listify(deps)
+
     lunder = name.lower()
     ldash = lunder.replace("_", "-")
     upper = name.upper().replace("-", "_")
-    if isinstance(incs, str):
-        incs = [incs]
 
     incpath = []
     incdir = getattr(cfg.options, f'with_{lunder}_include', None)
@@ -76,10 +77,12 @@ def generic_configure_incs(cfg, name, incs, deps=[]):
     cfg.end_msg(cfg.env[f'INCLUDES_{upper}'])
 
 def generic_configure_libs(cfg, name, libs, deps=()):
+    libs = listify(libs)
+    deps = listify(deps)
+
     lunder = name.lower()
     ldash = lunder.replace("_", "-")
     upper = name.upper().replace("-", "_")
-    deps = listify(deps)
 
     if isinstance(libs, str):
         libs = [libs]
