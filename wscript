@@ -14,14 +14,14 @@ def options(opt):
 def configure(cfg):
     cfg.env.CXXFLAGS += ['-std=c++17', '-ggdb3', '-Wall', '-Werror']
     proj.configure(cfg)
-    print(cfg.env)
     for inc in "sml nljs cppzmq libzmq libczmq libzyre".split():
         upper=inc.upper()
         assert(cfg.env[f"INCLUDES_{upper}"])
 
-    for lib in "libzmq libczmq libzyre pthread".split():
+    for lib in "libzmq libczmq libzyre".split():
         upper=lib.upper()
-        assert(cfg.env[f"LIBPATH_{upper}"])
+        if not cfg.env[f"LIBPATH_{upper}"]:
+            raise RuntimeError(f"No libraries for {upper}")
 
 from waflib.Utils import subst_vars
 from subprocess import check_output
@@ -35,7 +35,6 @@ def import_scanner(task):
         deps += out.split("\n")
 
     deps = [task.generator.bld.path.find_or_declare(d) for d in deps if d]
-    print(deps)
     return (deps, [])
 
 def build(bld):
