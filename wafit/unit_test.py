@@ -22,7 +22,7 @@ def configure(cfg):
 from waflib import Context
 from waflib.Configure import conf
 @conf
-def unit_test(bld, sources, incs=(), uses=()):
+def unit_test(bld, sources, incs=(), uses=(), csources=()):
     '''Register unit tests.
 
     Example usage
@@ -38,6 +38,10 @@ def unit_test(bld, sources, incs=(), uses=()):
 
     The uses can specify additional dependencies beyond what the
     package requires.
+
+    The csources are like sources but for to make "check" programs
+    which are not executed as unit tests and not installed but
+    available under build directory to run for local checking.
 
     '''
     sources = util.listify(sources)
@@ -57,15 +61,28 @@ def unit_test(bld, sources, incs=(), uses=()):
     if bld.options.quell_tests:
         features = 'cxx'
 
-    for tmain in sources:
+    rpath = util.rpath(bld) + [bld.path.find_or_declare(bld.out_dir)]
 
+    for tmain in sources:
         bld.program(features=features,
-                    source=[tmain], target=tmain.name.replace('.cpp', ''),
+                    source=[tmain],
+                    target=tmain.name.replace('.cpp', ''),
                     ut_cwd=bld.path,
                     install_path=None,
                     includes=incs,
-                    rpath=util.rpath(bld) + [bld.path.find_or_declare(bld.out_dir)],
+                    rpath=rpath,
                     use=uses)
+        
+    for cmain in csources:
+        bld.program(features = 'cxx',
+                    source=[cmain],
+                    target = cmain.name.replace('.cpp',''),
+                    ut_cwd=bld.path,
+                    install_path=None,
+                    includes=incs,
+                    rpath=rpath,
+                    use=uses)
+
 
     bld.add_post_fun(waf_unit_test.summary)
     

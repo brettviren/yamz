@@ -11,5 +11,5 @@ def options(opt):
 def configure(cfg):
     cfg.load("libzmq")
     util.generic_configure_incs(cfg, "cppzmq",
-                                ["zmq.hpp", "zmq_addon.hpp"])
+                                ["zmq.hpp", "zmq_addon.hpp"], "libzmq")
 

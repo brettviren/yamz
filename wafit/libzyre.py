@@ -11,6 +11,6 @@ def options(opt):
 
 def configure(cfg):
     cfg.load("libczmq")
-    util.generic_configure_incs(cfg, "libzyre", "zyre.h")
+    util.generic_configure_incs(cfg, "libzyre", "zyre.h", "libczmq")
     util.generic_configure_libs(cfg, "libzyre", "zyre", "libczmq")
 

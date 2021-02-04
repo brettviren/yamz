@@ -6,7 +6,7 @@
 [subrepo]
 	remote = git@github.com:brettviren/wafit.git
 	branch = master
-	commit = 0f438b62ebe404beda4025a47922f6c81a89ad8c
-	parent = ded64813a4f90e4553d384f1c7e93c6d2563e0ce
+	commit = 77528c73108b758c587913c4d97888dc6b6bb93c
+	parent = 58601b72d5091b237584855905cb6a2ff0f9f52a
 	method = merge
 	cmdver = 0.4.1

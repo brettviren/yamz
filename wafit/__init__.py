@@ -3,7 +3,7 @@
 import os
 import sys
 
-from .util import listify
+from .util import *
 from waflib import Context
 
 # so ctx.load("tool") finds our tools

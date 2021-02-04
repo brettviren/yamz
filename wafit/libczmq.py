@@ -11,6 +11,6 @@ def options(opt):
 
 def configure(cfg):
     cfg.load("libzmq")
-    util.generic_configure_incs(cfg, "libczmq", "czmq.h")
-    util.generic_configure_libs(cfg, "libczmq", "czmq", "zmq")
+    util.generic_configure_incs(cfg, "libczmq", "czmq.h", "libzmq")
+    util.generic_configure_libs(cfg, "libczmq", "czmq", "libzmq")
 

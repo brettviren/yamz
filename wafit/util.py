@@ -46,7 +46,8 @@ def generic_options(opt, name, libs=True, incs=True):
 
 def generic_configure_incs(cfg, name, incs, deps=()):
     incs = listify(incs)
-    deps = listify(deps)
+    DEPS = [d.upper() for d in listify(deps)]
+    #print(f"{name} generic_configure_incs deps: {DEPS}")
 
     lunder = name.lower()
     ldash = lunder.replace("_", "-")
@@ -61,7 +62,7 @@ def generic_configure_incs(cfg, name, incs, deps=()):
         if withdir:
             incpath = [osp.join(withdir, "include")]
     if not incpath:
-        pp = getattr(cfg.options, 'prefix_path', None)
+        pp = getattr(cfg.options, 'prefix_path', []) or []
         for p in pp:
             for maybe in ['include', lunder+'/include', name+'/include']:
                 adir = osp.join(p, maybe)
@@ -73,12 +74,14 @@ def generic_configure_incs(cfg, name, incs, deps=()):
     for header in incs:
         cfg.check(features='cxx cxxprogram',
                   header_name=header,
-                  use=[upper] + deps, uselib_store=upper)
+                  use=[upper]+DEPS,
+                  uselib_store=upper)
     cfg.end_msg(cfg.env[f'INCLUDES_{upper}'])
 
 def generic_configure_libs(cfg, name, libs, deps=()):
     libs = listify(libs)
-    deps = listify(deps)
+    DEPS = [d.upper() for d in listify(deps)]
+    #print(f"{name} generic_configure_libs deps: {DEPS}")
 
     lunder = name.lower()
     ldash = lunder.replace("_", "-")
@@ -99,7 +102,7 @@ def generic_configure_libs(cfg, name, libs, deps=()):
                 if osp.exists(mll) and mll not in libpath:
                     libpath.append(mll)
     if not libpath:
-        pp = getattr(cfg.options, 'prefix_path', None)
+        pp = getattr(cfg.options, 'prefix_path', []) or []
         for p in pp:
             for maybe in ['lib', 'lib64',
                           lunder+'/lib', lunder+'/lib64',
@@ -112,6 +115,6 @@ def generic_configure_libs(cfg, name, libs, deps=()):
     cfg.start_msg(f'Checking for {name} libs')
     for tryl in libs:
         cfg.check_cxx(lib=tryl,
-                      use=[upper] + deps,
+                      use=[upper] + DEPS,
                       uselib_store=upper)
     cfg.end_msg(cfg.env[f'LIBPATH_{upper}'])
